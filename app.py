@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import importlib
+import base64
 from pathlib import Path
 
 import pandas as pd
@@ -52,6 +53,11 @@ def password_matches(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(entered_hash, password_hash)
 
 
+def logo_data_uri() -> str:
+    encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
 def require_login() -> None:
     auth_config = get_auth_config()
     users = dict(auth_config.get("users", {}))
@@ -98,7 +104,10 @@ def require_login() -> None:
             text-align: center;
         }
         .login-logo img {
-            margin: 0 auto 0.5rem auto;
+            width: 100%;
+            max-width: 240px;
+            height: auto;
+            margin: 0 auto 1rem auto;
             display: block;
         }
         .brand-traid {
@@ -113,9 +122,7 @@ def require_login() -> None:
     )
     left_space, login_column, right_space = st.columns([1, 0.42, 1])
     with login_column:
-        st.markdown("<div class='login-logo'>", unsafe_allow_html=True)
-        st.image(str(LOGO_PATH), width=240)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='login-logo'><img src='{logo_data_uri()}' alt='TraidSim'></div>", unsafe_allow_html=True)
         st.caption("Bitte anmelden, um fortzufahren.")
         with st.form("login_form"):
             username = st.text_input("Benutzername")
