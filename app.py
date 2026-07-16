@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import importlib
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -30,6 +31,10 @@ run_hyperopt = hyperopt_module.run_hyperopt
 CRITERIA = telemetry_module.CRITERIA
 apply_enabled_criteria_signals = telemetry_module.apply_enabled_criteria_signals
 build_criterion_telemetry = telemetry_module.build_criterion_telemetry
+
+
+APP_DIR = Path(__file__).parent
+LOGO_PATH = APP_DIR / "assets" / "traidsim_logo.png"
 
 
 st.set_page_config(page_title="TraidSim", page_icon="chart_with_upwards_trend", layout="wide")
@@ -92,6 +97,10 @@ def require_login() -> None:
         .login-brand {
             text-align: center;
         }
+        .login-logo img {
+            margin: 0 auto 0.5rem auto;
+            display: block;
+        }
         .brand-traid {
             color: #22c55e;
         }
@@ -104,10 +113,9 @@ def require_login() -> None:
     )
     left_space, login_column, right_space = st.columns([1, 0.42, 1])
     with login_column:
-        st.markdown(
-            "<h1 class='login-brand'><span class='brand-traid'>Traid</span><span class='brand-sim'>Sim</span></h1>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div class='login-logo'>", unsafe_allow_html=True)
+        st.image(str(LOGO_PATH), width=240)
+        st.markdown("</div>", unsafe_allow_html=True)
         st.caption("Bitte anmelden, um fortzufahren.")
         with st.form("login_form"):
             username = st.text_input("Benutzername")
@@ -327,7 +335,7 @@ def make_criterion_heatmap(period_df: pd.DataFrame, value_column: str, title: st
     return fig
 
 
-st.markdown("<h1><span style='color:#22c55e'>Traid</span><span style='color:#ef4444'>Sim</span></h1>", unsafe_allow_html=True)
+st.image(str(LOGO_PATH), width=260)
 st.caption("Trading-Simulation fuer Aktien und Krypto: Watchlist, technische Analyse, Hyperopt und Backtest")
 st.warning(DISCLAIMER)
 
