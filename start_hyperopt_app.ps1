@@ -1,0 +1,4 @@
+$ErrorActionPreference = "Continue"
+$env:STREAMLIT_BROWSER_GATHER_USAGE_STATS = "false"
+Set-Location -LiteralPath $PSScriptRoot
+& "$PSScriptRoot\.venv\Scripts\python.exe" -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true --browser.gatherUsageStats false

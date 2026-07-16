@@ -1,0 +1,15 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+app_data.db
+.yfinance_cache/
+.env
+app_data.db
+*.sqlite
+*.csv
+*.xlsx
+*.log
+.DS_Store
+.streamlit/secrets.toml
