@@ -189,29 +189,44 @@ def run_hyperopt(
     price_df: pd.DataFrame,
     initial_capital: float = 10_000.0,
     trading_fee: float = 0.001,
+    risk_per_trade: float = 0.01,
+    atr_stop_factor: float = 2.0,
+    atr_take_profit_factor: float = 3.0,
     max_trials: int = 100,
     min_trades: int = 1,
     seed: int = 42,
     enabled_criteria: dict[str, bool] | None = None,
 ) -> pd.DataFrame:
     rows = []
+    optimize_risk = enabled_criteria is None or enabled_criteria.get("risk_management", True)
 
     for trial_number, params in enumerate(_candidate_grid(max_trials=max_trials, seed=seed), start=1):
+        trial_risk_per_trade = params.risk_per_trade if optimize_risk else risk_per_trade
+        trial_atr_stop_factor = params.atr_stop_factor if optimize_risk else atr_stop_factor
+        trial_atr_take_profit_factor = params.atr_take_profit_factor if optimize_risk else atr_take_profit_factor
         indicator_df = add_indicators(price_df, params.indicator_parameters())
         signal_df = generate_signals(indicator_df, params.strategy_parameters(enabled_criteria))
         trades_df, equity_df = backtest(
             signal_df,
             initial_capital=initial_capital,
-            risk_per_trade=params.risk_per_trade,
-            atr_stop_factor=params.atr_stop_factor,
-            atr_take_profit_factor=params.atr_take_profit_factor,
+            risk_per_trade=trial_risk_per_trade,
+            atr_stop_factor=trial_atr_stop_factor,
+            atr_take_profit_factor=trial_atr_take_profit_factor,
             trading_fee=trading_fee,
         )
         metrics = calculate_metrics(trades_df, equity_df, initial_capital)
+        row = asdict(params)
+        row.update(
+            {
+                "risk_per_trade": trial_risk_per_trade,
+                "atr_stop_factor": trial_atr_stop_factor,
+                "atr_take_profit_factor": trial_atr_take_profit_factor,
+            }
+        )
         rows.append(
             {
                 "Durchlauf": trial_number,
-                **asdict(params),
+                **row,
                 "Objective": objective_score(metrics, min_trades=min_trades),
                 "Gesamtrendite %": metrics.get("Gesamtrendite %", 0.0),
                 "Max. Drawdown %": metrics.get("Max. Drawdown %", 0.0),

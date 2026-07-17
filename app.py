@@ -259,9 +259,9 @@ def hyperopt_parameter_rows(
         ("ichimoku", "Ichimoku bullisch", "Tenkan-Periode", "ichimoku_tenkan"),
         ("ichimoku", "Ichimoku bullisch", "Kijun-Periode", "ichimoku_kijun"),
         ("ichimoku", "Ichimoku bullisch", "Senkou-B-Periode", "ichimoku_senkou_b"),
-        (None, "Risikomanagement", "Risiko je Trade", "risk_per_trade"),
-        (None, "Risikomanagement", "ATR Stop-Faktor", "atr_stop_factor"),
-        (None, "Risikomanagement", "ATR Take-Profit-Faktor", "atr_take_profit_factor"),
+        ("risk_management", "Risikomanagement", "Risiko je Trade", "risk_per_trade"),
+        ("risk_management", "Risikomanagement", "ATR Stop-Faktor", "atr_stop_factor"),
+        ("risk_management", "Risikomanagement", "ATR Take-Profit-Faktor", "atr_take_profit_factor"),
     ]
 
     influences = calculate_parameter_influences(results_df) if results_df is not None else {}
@@ -766,7 +766,7 @@ with hyperopt_tab:
     if enable_hyperopt:
         st.write("### Hyperopt")
         st.caption(
-            "Optimiert die Parameter aus den Kriterien: SMA, RSI, MACD, Bollinger, Fibonacci, Volumen, Stochastik, ATR, Ichimoku sowie Risiko/Stop/Take-Profit."
+            "Optimiert die Parameter aus den ausgewaehlten Kriterien. Risikomanagement kann separat ein- oder ausgeschaltet werden."
         )
         criteria_labels = {
             "trend": "SMA Trend positiv",
@@ -778,6 +778,7 @@ with hyperopt_tab:
             "stoch": "Stochastik positiv",
             "atr": "ATR Volatilitaet handelbar",
             "ichimoku": "Ichimoku bullisch",
+            "risk_management": "Risikomanagement optimieren",
         }
         st.write("### Kriterien fuer Hyperopt")
         st.caption("Nur angehakte Kriterien werden als Pflichtfilter im Hyperopt verwendet.")
@@ -791,6 +792,7 @@ with hyperopt_tab:
             "stoch": False,
             "atr": False,
             "ichimoku": False,
+            "risk_management": False,
         }
         hyperopt_criteria = {}
         criteria_columns = st.columns(3)
@@ -814,6 +816,9 @@ with hyperopt_tab:
                         df,
                         initial_capital=initial_capital,
                         trading_fee=fee,
+                        risk_per_trade=risk_per_trade,
+                        atr_stop_factor=atr_stop,
+                        atr_take_profit_factor=atr_tp,
                         max_trials=hyperopt_trials,
                         min_trades=hyperopt_min_trades,
                         enabled_criteria=hyperopt_criteria,
