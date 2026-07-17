@@ -149,7 +149,7 @@ Dies ist ein technisches Analyse- und Backtesting-Tool. Es handelt sich nicht um
 Die Signale sind regelbasierte technische Auswertungen und keine persoenliche Kauf- oder Verkaufsempfehlung.
 """
 
-DEFAULT_WATCHLIST = "AAPL,AMZN,NVDA,MSFT,GOOGL,BTC-USD,ETH-USD,SOL-USD,1211.HK"
+DEFAULT_WATCHLIST = "AAPL,AMZN,NVDA,MSFT,GOOGL,BTC-USDT,ETH-USDT,SOL-USDT,1211.HK"
 
 
 def parse_symbols(raw_symbols: str) -> list[str]:

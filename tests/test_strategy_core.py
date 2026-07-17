@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from src.backtest import backtest
+from src.data_provider import crypto_usdt_symbol
 from src.indicators import add_indicators, sma
 from src.scoring import signal_history_payload, strategy_score
 from src.strategy import generate_signals
@@ -27,6 +28,13 @@ def test_sma_uses_rolling_mean() -> None:
     result = sma(series, 3)
     assert pd.isna(result.iloc[1])
     assert result.iloc[-1] == 4
+
+
+def test_crypto_symbols_are_mapped_to_usdt_pairs() -> None:
+    assert crypto_usdt_symbol("BTC-USD") == "BTCUSDT"
+    assert crypto_usdt_symbol("ETH-USDT") == "ETHUSDT"
+    assert crypto_usdt_symbol("SOLUSDT") == "SOLUSDT"
+    assert crypto_usdt_symbol("AAPL") is None
 
 
 def test_indicators_create_expected_columns() -> None:
