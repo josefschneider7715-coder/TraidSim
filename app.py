@@ -213,13 +213,13 @@ def influence_label(score: float) -> str:
 
 def influence_color(score: float) -> str:
     score = max(0.0, min(100.0, float(score)))
-    green = (34, 197, 94)
-    amber = (245, 158, 11)
     red = (239, 68, 68)
+    amber = (245, 158, 11)
+    green = (34, 197, 94)
     if score <= 50:
-        start, end, ratio = green, amber, score / 50
+        start, end, ratio = red, amber, score / 50
     else:
-        start, end, ratio = amber, red, (score - 50) / 50
+        start, end, ratio = amber, green, (score - 50) / 50
     rgb = tuple(round(start[index] + (end[index] - start[index]) * ratio) for index in range(3))
     return f"background-color: rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, 0.35); color: #f8fafc; font-weight: 700;"
 
@@ -837,7 +837,7 @@ with hyperopt_tab:
                 styled_parameter_df = parameter_df.style.apply(style_hyperopt_parameter_row, axis=1).format(
                     {"Einfluss %": "{:.0f}"}
                 )
-                st.caption("Einfluss: gruen = gering/unwichtig, gelb = mittel, rot = wichtig im aktuellen Hyperopt-Lauf.")
+                st.caption("Einfluss: rot = gering/unwichtig, gelb = mittel, gruen = wichtig im aktuellen Hyperopt-Lauf.")
                 st.dataframe(styled_parameter_df, use_container_width=True)
                 st.write(f"### Kerzenchart: {selected_symbol}")
                 st.plotly_chart(make_candlestick_chart(df, selected_symbol), use_container_width=True)
