@@ -9,7 +9,10 @@ import pandas as pd
 
 
 YFINANCE_CACHE_DIR = Path(__file__).resolve().parents[1] / ".yfinance_cache"
-BINANCE_BASE_URL = "https://api.binance.com/api/v3/klines"
+BINANCE_BASE_URLS = [
+    "https://api.binance.com/api/v3/klines",
+    "https://api.binance.us/api/v3/klines",
+]
 CRYPTO_BASES = {
     "BTC",
     "ETH",
@@ -108,34 +111,43 @@ class BinanceUSDTDataProvider(MarketDataProvider):
 
         end_time = pd.Timestamp.now(tz="UTC")
         start_time = end_time - PERIOD_OFFSETS.get(period, PERIOD_OFFSETS["5y"])
-        rows = []
-        next_start_ms = int(start_time.timestamp() * 1000)
         end_ms = int(end_time.timestamp() * 1000)
+        last_error = None
 
-        while next_start_ms < end_ms:
-            query = urlencode(
-                {
-                    "symbol": binance_symbol,
-                    "interval": BINANCE_INTERVALS[interval],
-                    "startTime": next_start_ms,
-                    "endTime": end_ms,
-                    "limit": 1000,
-                }
-            )
-            with urlopen(f"{BINANCE_BASE_URL}?{query}", timeout=20) as response:
-                chunk = pd.read_json(response)
+        for base_url in BINANCE_BASE_URLS:
+            rows = []
+            next_start_ms = int(start_time.timestamp() * 1000)
+            try:
+                while next_start_ms < end_ms:
+                    query = urlencode(
+                        {
+                            "symbol": binance_symbol,
+                            "interval": BINANCE_INTERVALS[interval],
+                            "startTime": next_start_ms,
+                            "endTime": end_ms,
+                            "limit": 1000,
+                        }
+                    )
+                    with urlopen(f"{base_url}?{query}", timeout=20) as response:
+                        chunk = pd.read_json(response)
 
-            if chunk.empty:
+                    if chunk.empty:
+                        break
+
+                    rows.append(chunk)
+                    last_open_time = int(chunk.iloc[-1, 0])
+                    next_start_ms = last_open_time + 1
+                    if len(chunk) < 1000:
+                        break
+            except Exception as exc:
+                last_error = exc
+                continue
+
+            if rows:
                 break
-
-            rows.append(chunk)
-            last_open_time = int(chunk.iloc[-1, 0])
-            next_start_ms = last_open_time + 1
-            if len(chunk) < 1000:
-                break
-
-        if not rows:
-            raise ValueError(f"Keine Binance-USDT-Kursdaten fuer {binance_symbol} erhalten.")
+        else:
+            error_text = f" Letzter Fehler: {last_error}" if last_error else ""
+            raise ValueError(f"Keine Binance-USDT-Kursdaten fuer {binance_symbol} erhalten.{error_text}")
 
         raw = pd.concat(rows, ignore_index=True)
         raw = raw.iloc[:, [0, 1, 2, 3, 4, 5]]
