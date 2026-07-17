@@ -13,6 +13,7 @@ import streamlit as st
 from src.backtest import backtest, buy_and_hold_metrics, calculate_metrics
 from src.data_provider import download_data
 from src.indicators import add_indicators
+from src.monte_carlo import MonteCarloConfig, run_monte_carlo_robustness
 from src.scoring import signal_history_payload, strategy_score
 from src.storage import create_alert_if_buy, list_watchlists, recent_alerts, recent_signal_history, save_signal_history, save_watchlist
 from src.strategy import generate_signals
@@ -390,6 +391,46 @@ def make_hyperopt_convergence_chart(results_df: pd.DataFrame, symbol: str):
     return fig
 
 
+def make_monte_carlo_paths_chart(paths_df: pd.DataFrame, symbol: str):
+    fig = go.Figure()
+    if paths_df.empty:
+        fig.update_layout(title=f"{symbol} - Monte Carlo Zukunftspfade", height=420)
+        return fig
+
+    for path_id, path_df in paths_df.groupby("Pfad"):
+        fig.add_trace(
+            go.Scatter(
+                x=path_df["Tag"],
+                y=path_df["Close"],
+                mode="lines",
+                name=f"Pfad {path_id}",
+                line={"color": "rgba(148, 163, 184, 0.22)", "width": 1},
+                showlegend=False,
+                hovertemplate="Tag %{x}<br>Kurs %{y:.2f}<extra></extra>",
+            )
+        )
+
+    median_path = paths_df.groupby("Tag", as_index=False)["Close"].median()
+    fig.add_trace(
+        go.Scatter(
+            x=median_path["Tag"],
+            y=median_path["Close"],
+            mode="lines",
+            name="Median",
+            line={"color": "#22c55e", "width": 3},
+            hovertemplate="Tag %{x}<br>Median %{y:.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=f"{symbol} - Monte Carlo Zukunftspfade fuer 1 Jahr",
+        height=430,
+        xaxis_title="Handelstage in der Zukunft",
+        yaxis_title="Simulierter Kurs",
+        legend={"orientation": "h"},
+    )
+    return fig
+
+
 def make_criterion_heatmap(period_df: pd.DataFrame, value_column: str, title: str):
     if period_df.empty:
         return go.Figure()
@@ -727,6 +768,81 @@ with telemetry_tab:
         with sub_tab_events:
             event_view = events_telemetry[events_telemetry["role"] != "none"].copy()
             st.dataframe(event_view.tail(500), use_container_width=True)
+
+        st.write("### Monte-Carlo-Zukunftssimulation")
+        st.caption(
+            "Erzeugt viele moegliche 1-Jahres-Kurspfade aus historischen Renditen des gewaehlten Zeitfensters "
+            "und testet die aktiven Kriterien sowie Risiko-/Stop-/Take-Profit-Parameter auf Robustheit."
+        )
+        mc_col1, mc_col2 = st.columns(2)
+        monte_carlo_runs = mc_col1.slider(
+            "Monte-Carlo-Pfade",
+            min_value=50,
+            max_value=500,
+            value=200,
+            step=50,
+            key=f"mc_runs_{selected_symbol}",
+        )
+        monte_carlo_seed = mc_col2.number_input(
+            "Zufalls-Seed",
+            min_value=1,
+            max_value=999_999,
+            value=42,
+            step=1,
+            key=f"mc_seed_{selected_symbol}",
+        )
+        run_monte_carlo_button = st.button(
+            "Monte Carlo starten",
+            type="primary",
+            key=f"run_mc_{selected_symbol}",
+        )
+
+        if run_monte_carlo_button:
+            with st.spinner(f"Simuliere {monte_carlo_runs} Zukunftspfade fuer {selected_symbol}..."):
+                st.session_state["monte_carlo_result"] = {
+                    "symbol": selected_symbol,
+                    "criteria": tuple(enabled_criteria),
+                    "runs": monte_carlo_runs,
+                    "seed": int(monte_carlo_seed),
+                    "data": run_monte_carlo_robustness(
+                        history_df=simulation_source_df,
+                        enabled_criteria=enabled_criteria,
+                        initial_capital=initial_capital,
+                        risk_per_trade=risk_per_trade,
+                        atr_stop_factor=atr_stop,
+                        atr_take_profit_factor=atr_tp,
+                        trading_fee=fee,
+                        config=MonteCarloConfig(simulations=monte_carlo_runs, future_days=252, seed=int(monte_carlo_seed)),
+                    ),
+                }
+
+        monte_carlo_result = st.session_state.get("monte_carlo_result")
+        if monte_carlo_result and monte_carlo_result["symbol"] == selected_symbol:
+            mc_data = monte_carlo_result["data"]
+            mc_summary = mc_data["summary"]
+            mc_results = mc_data["results"]
+            mc_paths = mc_data["paths"]
+            if mc_summary.empty:
+                st.info("Fuer Monte Carlo sind mindestens ca. 30 historische Kurszeilen im gewaehlten Zeitfenster noetig.")
+            else:
+                score_value = float(mc_summary["Robustheits-Score %"].iloc[0])
+                score_color = "#22c55e" if score_value >= 67 else "#f59e0b" if score_value >= 34 else "#ef4444"
+                st.markdown(
+                    f"<h4>Robustheits-Score: <span style='color:{score_color}'>{score_value:.1f}%</span></h4>",
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(mc_summary, use_container_width=True)
+                st.plotly_chart(make_monte_carlo_paths_chart(mc_paths, selected_symbol), use_container_width=True)
+                st.write("### Monte-Carlo-Einzelergebnisse")
+                st.dataframe(mc_results.sort_values("Strategierendite %", ascending=False), use_container_width=True)
+                st.download_button(
+                    "Monte-Carlo-Ergebnisse als CSV herunterladen",
+                    mc_results.to_csv(index=False).encode("utf-8"),
+                    f"{selected_symbol}_monte_carlo_robustheit.csv",
+                    "text/csv",
+                )
+        else:
+            st.info("Starte Monte Carlo, um die aktiven Kriterien fuer ein simuliertes Zukunftsjahr zu testen.")
 
         st.download_button(
             "Kriterien-Auswertung als CSV herunterladen",
