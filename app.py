@@ -162,6 +162,8 @@ def format_metrics(metrics: dict) -> pd.DataFrame:
 
 def format_hyperopt_value(value):
     if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
         return round(value, 4)
     return value
 
@@ -956,7 +958,12 @@ with hyperopt_tab:
                 st.write("### Beste Parameter")
                 parameter_df = pd.DataFrame(hyperopt_parameter_rows(best_params, hyperopt_criteria, hyperopt_df))
                 styled_parameter_df = parameter_df.style.apply(style_hyperopt_parameter_row, axis=1).format(
-                    {"Einfluss %": "{:.0f}"}
+                    {
+                        "Hyperopt-Wert": lambda value: f"{value:.4f}".rstrip("0").rstrip(".")
+                        if isinstance(value, float)
+                        else value,
+                        "Einfluss %": "{:.0f}",
+                    }
                 )
                 st.caption("Einfluss: rot = gering/unwichtig, gelb = mittel, gruen = wichtig im aktuellen Hyperopt-Lauf.")
                 st.dataframe(styled_parameter_df, use_container_width=True)
