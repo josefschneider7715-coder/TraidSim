@@ -165,7 +165,76 @@ def format_hyperopt_value(value):
     return value
 
 
-def hyperopt_parameter_rows(best_params, enabled_criteria: dict[str, bool]) -> list[dict]:
+def calculate_parameter_influences(results_df: pd.DataFrame) -> dict[str, float]:
+    if results_df.empty or "Objective" not in results_df.columns:
+        return {}
+
+    penalty_limit = -999_000
+    valid = results_df[results_df["Objective"] > penalty_limit].copy()
+    if len(valid) < 2:
+        return {}
+
+    ignored_columns = {
+        "Durchlauf",
+        "Objective",
+        "Startkapital",
+        "Endkapital",
+        "Gesamtrendite %",
+        "Max. Drawdown %",
+        "Abgeschlossene Trades",
+        "Trefferquote %",
+        "Gewinnsumme",
+        "Durchschnitt Trade",
+        "Bester Trade",
+        "Schlechtester Trade",
+    }
+    raw_scores = {}
+    for column in valid.columns:
+        if column in ignored_columns or valid[column].nunique(dropna=True) < 2:
+            continue
+        grouped_objective = valid.groupby(column, dropna=True)["Objective"].mean()
+        if len(grouped_objective) < 2:
+            continue
+        raw_scores[column] = float(grouped_objective.max() - grouped_objective.min())
+
+    max_score = max(raw_scores.values(), default=0.0)
+    if max_score <= 0:
+        return {}
+    return {column: score / max_score * 100 for column, score in raw_scores.items()}
+
+
+def influence_label(score: float) -> str:
+    if score >= 67:
+        return "hoch"
+    if score >= 34:
+        return "mittel"
+    return "gering"
+
+
+def influence_color(score: float) -> str:
+    score = max(0.0, min(100.0, float(score)))
+    green = (34, 197, 94)
+    amber = (245, 158, 11)
+    red = (239, 68, 68)
+    if score <= 50:
+        start, end, ratio = green, amber, score / 50
+    else:
+        start, end, ratio = amber, red, (score - 50) / 50
+    rgb = tuple(round(start[index] + (end[index] - start[index]) * ratio) for index in range(3))
+    return f"background-color: rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, 0.35); color: #f8fafc; font-weight: 700;"
+
+
+def style_hyperopt_parameter_row(row: pd.Series) -> list[str]:
+    score = float(row.get("Einfluss %", 0.0))
+    style = influence_color(score)
+    return [style if column in {"Einfluss %", "Wichtigkeit"} else "" for column in row.index]
+
+
+def hyperopt_parameter_rows(
+    best_params,
+    enabled_criteria: dict[str, bool],
+    results_df: pd.DataFrame | None = None,
+) -> list[dict]:
     row_definitions = [
         ("trend", "SMA Trend positiv", "Trendfilter-Periode", "sma_trend_period"),
         ("rsi", "RSI im Zielbereich", "RSI-Periode", "rsi_period"),
@@ -195,15 +264,19 @@ def hyperopt_parameter_rows(best_params, enabled_criteria: dict[str, bool]) -> l
         (None, "Risikomanagement", "ATR Take-Profit-Faktor", "atr_take_profit_factor"),
     ]
 
+    influences = calculate_parameter_influences(results_df) if results_df is not None else {}
     rows = []
     for criterion_key, area, parameter, attribute in row_definitions:
         if criterion_key is not None and not enabled_criteria.get(criterion_key, False):
             continue
+        influence = round(influences.get(attribute, 0.0), 0)
         rows.append(
             {
                 "Bereich": area,
                 "Parameter": parameter,
                 "Hyperopt-Wert": format_hyperopt_value(getattr(best_params, attribute)),
+                "Einfluss %": influence,
+                "Wichtigkeit": influence_label(influence),
             }
         )
     return rows
@@ -760,7 +833,12 @@ with hyperopt_tab:
                 st.write("### Konvergenz")
                 st.plotly_chart(make_hyperopt_convergence_chart(hyperopt_df, selected_symbol), use_container_width=True)
                 st.write("### Beste Parameter")
-                st.dataframe(pd.DataFrame(hyperopt_parameter_rows(best_params, hyperopt_criteria)), use_container_width=True)
+                parameter_df = pd.DataFrame(hyperopt_parameter_rows(best_params, hyperopt_criteria, hyperopt_df))
+                styled_parameter_df = parameter_df.style.apply(style_hyperopt_parameter_row, axis=1).format(
+                    {"Einfluss %": "{:.0f}"}
+                )
+                st.caption("Einfluss: gruen = gering/unwichtig, gelb = mittel, rot = wichtig im aktuellen Hyperopt-Lauf.")
+                st.dataframe(styled_parameter_df, use_container_width=True)
                 st.write(f"### Kerzenchart: {selected_symbol}")
                 st.plotly_chart(make_candlestick_chart(df, selected_symbol), use_container_width=True)
         else:
