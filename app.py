@@ -924,34 +924,76 @@ with hyperopt_tab:
         if not any(hyperopt_criteria.values()):
             st.warning("Mindestens ein Hyperopt-Kriterium sollte aktiv sein.")
 
+        st.write("### Analyse-Zeitfenster")
+        hyperopt_available_dates = pd.to_datetime(df["Date"]).dt.date
+        hyperopt_min_date = hyperopt_available_dates.min()
+        hyperopt_max_date = hyperopt_available_dates.max()
+        hyperopt_date_col1, hyperopt_date_col2 = st.columns(2)
+        hyperopt_start_date = hyperopt_date_col1.date_input(
+            "Hyperopt Startdatum",
+            value=hyperopt_min_date,
+            min_value=hyperopt_min_date,
+            max_value=hyperopt_max_date,
+            key=f"hyperopt_start_date_{selected_symbol}",
+        )
+        hyperopt_end_date = hyperopt_date_col2.date_input(
+            "Hyperopt Enddatum",
+            value=hyperopt_max_date,
+            min_value=hyperopt_min_date,
+            max_value=hyperopt_max_date,
+            key=f"hyperopt_end_date_{selected_symbol}",
+        )
+        if hyperopt_start_date > hyperopt_end_date:
+            st.error("Das Hyperopt-Startdatum muss vor dem Enddatum liegen.")
+            hyperopt_source_df = df.iloc[0:0].copy()
+        else:
+            hyperopt_source_df = df[
+                (pd.to_datetime(df["Date"]).dt.date >= hyperopt_start_date)
+                & (pd.to_datetime(df["Date"]).dt.date <= hyperopt_end_date)
+            ].copy()
+            st.caption(
+                f"Hyperopt analysiert {hyperopt_start_date} bis {hyperopt_end_date} "
+                f"mit {len(hyperopt_source_df)} Kurszeilen."
+            )
+
         run_hyperopt_button = st.button("Hyperopt starten", type="primary")
     
         if run_hyperopt_button:
-            with st.spinner(f"Optimiere {selected_symbol} mit {hyperopt_trials} Durchlaeufen..."):
-                st.session_state["hyperopt_result"] = {
-                    "symbol": selected_symbol,
-                    "data": run_hyperopt(
-                        df,
-                        initial_capital=initial_capital,
-                        trading_fee=fee,
-                        risk_per_trade=risk_per_trade,
-                        atr_stop_factor=atr_stop,
-                        atr_take_profit_factor=atr_tp,
-                        max_trials=hyperopt_trials,
-                        min_trades=hyperopt_min_trades,
-                        enabled_criteria=hyperopt_criteria,
-                    ),
-                }
+            if len(hyperopt_source_df) < 220:
+                st.warning("Das Hyperopt-Zeitfenster sollte mindestens ca. 220 Kurszeilen enthalten.")
+            else:
+                with st.spinner(f"Optimiere {selected_symbol} mit {hyperopt_trials} Durchlaeufen..."):
+                    st.session_state["hyperopt_result"] = {
+                        "symbol": selected_symbol,
+                        "start_date": hyperopt_start_date,
+                        "end_date": hyperopt_end_date,
+                        "data": run_hyperopt(
+                            hyperopt_source_df,
+                            initial_capital=initial_capital,
+                            trading_fee=fee,
+                            risk_per_trade=risk_per_trade,
+                            atr_stop_factor=atr_stop,
+                            atr_take_profit_factor=atr_tp,
+                            max_trials=hyperopt_trials,
+                            min_trades=hyperopt_min_trades,
+                            enabled_criteria=hyperopt_criteria,
+                        ),
+                    }
     
         hyperopt_result = st.session_state.get("hyperopt_result")
-        if hyperopt_result and hyperopt_result["symbol"] == selected_symbol:
+        if (
+            hyperopt_result
+            and hyperopt_result["symbol"] == selected_symbol
+            and hyperopt_result.get("start_date") == hyperopt_start_date
+            and hyperopt_result.get("end_date") == hyperopt_end_date
+        ):
             hyperopt_df = hyperopt_result["data"]
             best_params = best_hyperopt_parameters(hyperopt_df)
     
             if best_params is None:
                 st.info("Keine Hyperopt-Ergebnisse vorhanden.")
             else:
-                opt_indicator_df = add_indicators(df, best_params.indicator_parameters())
+                opt_indicator_df = add_indicators(hyperopt_source_df, best_params.indicator_parameters())
                 opt_signal_df = generate_signals(opt_indicator_df, best_params.strategy_parameters(hyperopt_criteria))
                 st.write("### Konvergenz")
                 st.plotly_chart(make_hyperopt_convergence_chart(hyperopt_df, selected_symbol), use_container_width=True)
@@ -968,7 +1010,7 @@ with hyperopt_tab:
                 st.caption("Einfluss: rot = gering/unwichtig, gelb = mittel, gruen = wichtig im aktuellen Hyperopt-Lauf.")
                 st.dataframe(styled_parameter_df, use_container_width=True)
                 st.write(f"### Kerzenchart: {selected_symbol}")
-                st.plotly_chart(make_candlestick_chart(df, selected_symbol), use_container_width=True)
+                st.plotly_chart(make_candlestick_chart(hyperopt_source_df, selected_symbol), use_container_width=True)
         else:
             st.info("Klicke auf 'Hyperopt starten', um den ausgewaehlten Detailwert zu optimieren.")
     
