@@ -7,7 +7,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.comparison import (
-    align_equity_curves,
     comparison_metrics,
     run_buy_and_hold_benchmark,
     run_oracle_benchmark,
@@ -51,30 +50,9 @@ def _align_four_curves(risk_result, full_result, buy_hold_result, oracle_result)
 
 def _make_dual_strategy_chart(aligned: pd.DataFrame, symbol: str) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=aligned["Date"],
-            y=aligned["Strategie Risikomodell"],
-            mode="lines",
-            name="Strategie – Risikomodell",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=aligned["Date"],
-            y=aligned["Strategie 100 % Kapital"],
-            mode="lines",
-            name="Strategie – 100 % Kapital",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=aligned["Date"],
-            y=aligned["Buy and Hold"],
-            mode="lines",
-            name="Buy and Hold",
-        )
-    )
+    fig.add_trace(go.Scatter(x=aligned["Date"], y=aligned["Strategie Risikomodell"], mode="lines", name="Strategie – Risikomodell"))
+    fig.add_trace(go.Scatter(x=aligned["Date"], y=aligned["Strategie 100 % Kapital"], mode="lines", name="Strategie – 100 % Kapital"))
+    fig.add_trace(go.Scatter(x=aligned["Date"], y=aligned["Buy and Hold"], mode="lines", name="Buy and Hold"))
     fig.update_layout(
         title=f"{symbol} – Risikomodell und reiner Signalvergleich",
         height=560,
@@ -87,22 +65,8 @@ def _make_dual_strategy_chart(aligned: pd.DataFrame, symbol: str) -> go.Figure:
 
 def _make_advantage_chart(aligned: pd.DataFrame, symbol: str) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=aligned["Date"],
-            y=aligned["Vorteil Risikomodell"],
-            mode="lines",
-            name="Risikomodell minus Buy and Hold",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=aligned["Date"],
-            y=aligned["Vorteil Signalvergleich"],
-            mode="lines",
-            name="100-%-Signalvergleich minus Buy and Hold",
-        )
-    )
+    fig.add_trace(go.Scatter(x=aligned["Date"], y=aligned["Vorteil Risikomodell"], mode="lines", name="Risikomodell minus Buy and Hold"))
+    fig.add_trace(go.Scatter(x=aligned["Date"], y=aligned["Vorteil Signalvergleich"], mode="lines", name="100-%-Signalvergleich minus Buy and Hold"))
     fig.add_hline(y=0, line_dash="dash")
     fig.update_layout(
         title=f"{symbol} – Laufender Vorsprung oder Rückstand",
@@ -143,8 +107,6 @@ def render_strategy_comparison(
     fee: float,
     selected_symbol: str,
 ) -> None:
-    """Zeigt Risikomodell und reinen Signalvergleich nach Monte Carlo."""
-
     if simulation_source_df is None or len(simulation_source_df) < 2:
         st.info("Das gewählte Zeitfenster enthält zu wenig Kursdaten für den Strategievergleich.")
         return
@@ -179,12 +141,7 @@ def render_strategy_comparison(
             trading_fee=float(fee),
         )
         aligned = _align_four_curves(risk_result, full_result, buy_hold_result, oracle_result)
-        risk_comparison = comparison_metrics(
-            risk_result, buy_hold_result, oracle_result, float(initial_capital)
-        )
-        signal_comparison = comparison_metrics(
-            full_result, buy_hold_result, oracle_result, float(initial_capital)
-        )
+        signal_comparison = comparison_metrics(full_result, buy_hold_result, oracle_result, float(initial_capital))
     except Exception as exc:
         st.error(f"Strategievergleich konnte nicht berechnet werden: {exc}")
         return
@@ -207,48 +164,24 @@ def render_strategy_comparison(
     oracle_end = float(oracle_result.metrics.get("Endkapital", initial_capital))
 
     metric_cols = st.columns(6)
-    metric_cols[0].metric(
-        "Strategie – Risikomodell",
-        _eur(risk_end),
-        _pct(float(risk_result.metrics.get("Gesamtrendite %", 0.0))),
-    )
-    metric_cols[1].metric(
-        "Strategie – 100 % Kapital",
-        _eur(full_end),
-        _pct(float(full_result.metrics.get("Gesamtrendite %", 0.0))),
-    )
-    metric_cols[2].metric(
-        "Buy-and-Hold-Endkapital",
-        _eur(buy_hold_end),
-        _pct(float(buy_hold_result.metrics.get("Gesamtrendite %", 0.0))),
-    )
-    metric_cols[3].metric(
-        "Signalvorteil",
-        _eur(float(signal_comparison["Vorteil Strategie EUR"])),
-        _pct(float(signal_comparison["Vorteil Strategie %"])),
-    )
-    metric_cols[4].metric(
-        "Oracle-Endkapital",
-        _eur(oracle_end),
-        _pct(float(oracle_result.metrics.get("Gesamtrendite %", 0.0))),
-    )
+    metric_cols[0].metric("Strategie – Risikomodell", _eur(risk_end), _pct(float(risk_result.metrics.get("Gesamtrendite %", 0.0))))
+    metric_cols[1].metric("Strategie – 100 % Kapital", _eur(full_end), _pct(float(full_result.metrics.get("Gesamtrendite %", 0.0))))
+    metric_cols[2].metric("Buy-and-Hold-Endkapital", _eur(buy_hold_end), _pct(float(buy_hold_result.metrics.get("Gesamtrendite %", 0.0))))
+    metric_cols[3].metric("Signalvorteil", _eur(float(signal_comparison["Vorteil Strategie EUR"])), _pct(float(signal_comparison["Vorteil Strategie %"])))
+    metric_cols[4].metric("Oracle-Endkapital", _eur(oracle_end), _pct(float(oracle_result.metrics.get("Gesamtrendite %", 0.0))))
     metric_cols[5].metric(
         "Risikomodell",
         _pct(float(risk_result.metrics.get("Max. Drawdown %", 0.0))),
-        f"{int(risk_result.metrics.get('Abgeschlossene Trades', 0))} Trades · "
-        f"{_pct(float(risk_result.metrics.get('Marktzeit %', 0.0)))} Marktzeit",
+        f"{int(risk_result.metrics.get('Abgeschlossene Trades', 0))} Trades · {_pct(float(risk_result.metrics.get('Marktzeit %', 0.0)))} Marktzeit",
     )
 
     st.plotly_chart(_make_dual_strategy_chart(aligned, selected_symbol), use_container_width=True)
     st.plotly_chart(_make_advantage_chart(aligned, selected_symbol), use_container_width=True)
     st.plotly_chart(_make_oracle_chart(aligned, selected_symbol), use_container_width=True)
-    st.plotly_chart(
-        make_oracle_trade_chart(simulation_source_df, oracle_result.trades, selected_symbol),
-        use_container_width=True,
-    )
+    st.plotly_chart(make_oracle_trade_chart(simulation_source_df, oracle_result.trades, selected_symbol), use_container_width=True)
 
-    risk_tab, signal_tab, oracle_tab = st.tabs(
-        ["Risikomodell-Trades", "100-%-Signal-Trades", "Oracle-Trades"]
+    risk_tab, signal_tab, buy_hold_tab, oracle_tab = st.tabs(
+        ["Risikomodell-Trades", "100-%-Signal-Trades", "Buy-and-Hold", "Oracle-Trades"]
     )
     with risk_tab:
         st.dataframe(risk_result.metrics, use_container_width=True)
@@ -262,6 +195,16 @@ def render_strategy_comparison(
             st.info("Keine Trades im 100-%-Signalvergleich.")
         else:
             st.dataframe(full_result.trades, use_container_width=True)
+    with buy_hold_tab:
+        st.dataframe(buy_hold_result.metrics, use_container_width=True)
+        st.caption(
+            "Buy and Hold kauft zum ersten Eröffnungskurs des gewählten Zeitfensters und verkauft "
+            "zum letzten Schlusskurs. Kauf- und Verkaufsgebühr werden berücksichtigt."
+        )
+        if buy_hold_result.trades.empty:
+            st.info("Keine Buy-and-Hold-Transaktionen vorhanden.")
+        else:
+            st.dataframe(buy_hold_result.trades, use_container_width=True)
     with oracle_tab:
         if oracle_result.trades.empty:
             st.info("Das Oracle bleibt in diesem Zeitfenster vollständig in Cash.")
@@ -269,10 +212,6 @@ def render_strategy_comparison(
             st.dataframe(oracle_result.trades, use_container_width=True)
 
 
-# Die bewährte Anwendung bleibt im ursprünglichen Streamlit-Ausführungskontext.
-# Es werden nur zwei klar definierte Stellen im Quelltext ersetzt:
-# 1. die Alles-oder-nichts-Einstiegslogik durch die Bewertungslogik,
-# 2. der Strategievergleich direkt nach dem Monte-Carlo-Bereich.
 _legacy_path = Path(__file__).with_name("_legacy_app.py")
 _source = _legacy_path.read_text(encoding="utf-8-sig")
 
