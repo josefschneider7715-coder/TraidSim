@@ -227,9 +227,9 @@ _comparison_injected = '''        render_strategy_comparison(
             simulation_df=simulation_df,
             simulation_source_df=simulation_source_df,
             initial_capital=initial_capital,
-            risk_per_trade=risk_per_trade,
-            atr_stop=atr_stop,
-            atr_tp=atr_tp,
+            risk_per_trade=simulation_risk_per_trade,
+            atr_stop=simulation_atr_stop,
+            atr_tp=simulation_atr_tp,
             fee=fee,
             selected_symbol=selected_symbol,
         )

@@ -777,6 +777,7 @@ if st.session_state.get("login_defaults_applied_for") != current_user:
     st.session_state["hyperopt2_objective_AAPL"] = "return"
     for default_criterion in ("trend", "rsi", "macd", "bollinger", "fibonacci", "volume", "stoch", "atr", "ichimoku", "risk_management"):
         st.session_state[f"hyperopt2_criterion_AAPL_{default_criterion}"] = True
+    st.session_state["simulation_risk_management_AAPL"] = True
     st.session_state["login_defaults_applied_for"] = current_user
 
 apple_index = valid_symbols.index("AAPL") if "AAPL" in valid_symbols else 0
@@ -834,6 +835,13 @@ with telemetry_tab:
         if is_enabled:
             enabled_criteria.append(criterion.criterion_id)
 
+    with toggle_columns[len(CRITERIA) % 3]:
+        simulation_risk_management = st.checkbox(
+            localize_phrase("Risikomanagement", language),
+            value=True,
+            key=f"simulation_risk_management_{selected_symbol}",
+        )
+
     parameter_values = {
         "sma_trend_period": 50, "rsi_period": 14, "rsi_min": 40.0, "rsi_max": 65.0,
         "exit_rsi_max": 75.0, "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
@@ -841,6 +849,8 @@ with telemetry_tab:
         "volume_factor": 1.0, "stoch_period": 14, "stoch_signal": 3, "stoch_min": 20.0,
         "stoch_max": 80.0, "atr_period": 14, "atr_min_pct": 1.0, "atr_max_pct": 8.0,
         "ichimoku_tenkan": 9, "ichimoku_kijun": 26, "ichimoku_senkou_b": 52,
+        "simulation_risk_pct": risk_per_trade * 100.0,
+        "atr_stop_factor": atr_stop, "atr_take_profit_factor": atr_tp,
     }
     fields_by_criterion = {
         "trend_filter": [("sma_trend_period", 5, 200, 1)],
@@ -852,11 +862,14 @@ with telemetry_tab:
         "stochastic_filter": [("stoch_period", 2, 50, 1), ("stoch_signal", 1, 20, 1), ("stoch_min", 0.0, 99.0, 1.0), ("stoch_max", 1.0, 100.0, 1.0)],
         "atr_filter": [("atr_period", 2, 100, 1), ("atr_min_pct", 0.0, 30.0, 0.1), ("atr_max_pct", 0.1, 50.0, 0.1)],
         "ichimoku_filter": [("ichimoku_tenkan", 2, 100, 1), ("ichimoku_kijun", 3, 200, 1), ("ichimoku_senkou_b", 4, 300, 1)],
+        "risk_management": [("simulation_risk_pct", 0.25, 5.0, 0.25), ("atr_stop_factor", 0.5, 5.0, 0.25), ("atr_take_profit_factor", 0.5, 8.0, 0.25)],
     }
     with st.expander(tr("simulation_parameter_values"), expanded=True):
         st.caption(tr("simulation_parameter_help"))
         parameter_columns = st.columns(3)
         visible_fields = [field for criterion_id in enabled_criteria for field in fields_by_criterion[criterion_id]]
+        if simulation_risk_management:
+            visible_fields.extend(fields_by_criterion["risk_management"])
         for field_index, (field_name, minimum, maximum, step) in enumerate(visible_fields):
             with parameter_columns[field_index % 3]:
                 parameter_values[field_name] = st.number_input(
@@ -867,6 +880,9 @@ with telemetry_tab:
 
     simulation_indicator_params = IndicatorParameters(**{key: parameter_values[key] for key in IndicatorParameters.__dataclass_fields__})
     simulation_strategy_params = StrategyParameters(**{key: parameter_values[key] for key in StrategyParameters.__dataclass_fields__ if key in parameter_values})
+    simulation_risk_per_trade = parameter_values["simulation_risk_pct"] / 100.0 if simulation_risk_management else risk_per_trade
+    simulation_atr_stop = parameter_values["atr_stop_factor"] if simulation_risk_management else atr_stop
+    simulation_atr_tp = parameter_values["atr_take_profit_factor"] if simulation_risk_management else atr_tp
     simulation_parameterized_df = generate_signals(add_indicators(df, simulation_indicator_params), simulation_strategy_params)
 
     if simulation_start_date > simulation_end_date:
@@ -883,9 +899,9 @@ with telemetry_tab:
     simulation_trades_df, simulation_equity_df = backtest(
         simulation_df,
         initial_capital=initial_capital,
-        risk_per_trade=risk_per_trade,
-        atr_stop_factor=atr_stop,
-        atr_take_profit_factor=atr_tp,
+        risk_per_trade=simulation_risk_per_trade,
+        atr_stop_factor=simulation_atr_stop,
+        atr_take_profit_factor=simulation_atr_tp,
         trading_fee=fee,
     )
     simulation_metrics = calculate_metrics(simulation_trades_df, simulation_equity_df, initial_capital)
@@ -905,7 +921,7 @@ with telemetry_tab:
             st.info(tr("no_telemetry"))
     else:
         metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-        metric_col1.metric(tr("active_criteria"), summary_telemetry["Kriterium"].nunique())
+        metric_col1.metric(tr("active_criteria"), summary_telemetry["Kriterium"].nunique() + int(simulation_risk_management))
         metric_col2.metric(tr("evaluations"), int(summary_telemetry["evaluation_count"].sum()))
         metric_col3.metric(tr("trades"), simulation_metrics.get("Abgeschlossene Trades", 0))
         metric_col4.metric(tr("return"), f"{simulation_metrics.get('Gesamtrendite %', 0.0):.2f}%")
@@ -1374,10 +1390,15 @@ with hyperopt2_tab:
                     st.session_state[f"simulation_criterion_{selected_symbol}_{criterion_id}"] = bool(
                         h2_recommended.get(criterion_key, False)
                     )
+                risk_is_enabled = bool(h2_state.get("criteria", {}).get("risk_management", False))
+                st.session_state[f"simulation_risk_management_{selected_symbol}"] = risk_is_enabled
                 for parameter_name in hyperopt_module.HyperoptParameters.__dataclass_fields__:
                     if parameter_name in IndicatorParameters.__dataclass_fields__ or parameter_name in StrategyParameters.__dataclass_fields__:
                         st.session_state[f"simulation_value_{selected_symbol}_{parameter_name}"] = getattr(h2_best, parameter_name)
                 if h2_state.get("criteria", {}).get("risk_management", False):
+                    st.session_state[f"simulation_value_{selected_symbol}_simulation_risk_pct"] = float(h2_best.risk_per_trade) * 100.0
+                    st.session_state[f"simulation_value_{selected_symbol}_atr_stop_factor"] = float(h2_best.atr_stop_factor)
+                    st.session_state[f"simulation_value_{selected_symbol}_atr_take_profit_factor"] = float(h2_best.atr_take_profit_factor)
                     st.session_state["risk_per_trade_input"] = float(h2_best.risk_per_trade)
                     st.session_state["atr_stop_input"] = float(h2_best.atr_stop_factor)
                     st.session_state["atr_tp_input"] = float(h2_best.atr_take_profit_factor)

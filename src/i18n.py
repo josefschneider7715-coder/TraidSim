@@ -387,6 +387,12 @@ def parameter_label(parameter: object, language: str = "de") -> object:
     if not isinstance(parameter, str):
         return parameter
     selected_language = language if language in PARAMETER_LABELS else "de"
+    if parameter == "simulation_risk_pct":
+        return {
+            "de": "Risikomanagement – Risiko je Trade (%)",
+            "en": "Risk management – risk per trade (%)",
+            "ru": "Управление риском – риск на сделку (%)",
+        }[selected_language]
     if parameter.startswith("criterion_"):
         criterion = parameter.removeprefix("criterion_").replace("stoch", "Stochastik").replace("volume", "Volumen")
         prefix = {"de": "Kriterium", "en": "Criterion", "ru": "Критерий"}[selected_language]
