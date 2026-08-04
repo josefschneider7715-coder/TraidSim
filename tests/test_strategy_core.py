@@ -4,6 +4,7 @@ import pandas as pd
 
 from src.backtest import backtest
 from src.data_provider import crypto_usdt_symbol
+from src.hyperopt import HyperoptParameters
 from src.indicators import add_indicators, sma
 from src.scoring import signal_history_payload, strategy_score
 from src.strategy import generate_signals
@@ -136,3 +137,42 @@ def test_criterion_telemetry_only_uses_enabled_criteria() -> None:
 
     assert set(telemetry["summary"]["criterion_id"]) == set(enabled)
     assert set(telemetry["events"]["criterion_id"]) == set(enabled)
+
+
+def test_simulation_and_hyperopt_use_identical_entry_logic() -> None:
+    enabled_hyperopt = {
+        "trend": False,
+        "rsi": True,
+        "macd": True,
+        "bollinger": True,
+        "fibonacci": True,
+        "volume": True,
+        "stoch": False,
+        "atr": True,
+        "ichimoku": True,
+    }
+    enabled_simulation = [
+        "rsi_filter", "macd_filter", "bollinger_filter", "fibonacci_filter",
+        "volume_filter", "atr_filter", "ichimoku_filter",
+    ]
+    params = HyperoptParameters(
+        sma_trend_period=50,
+        rsi_period=14, rsi_min=35, rsi_max=70, exit_rsi_max=75,
+        macd_fast=16, macd_slow=35, macd_signal=7,
+        bb_period=20, bb_std=1.8, fib_lookback=90,
+        volume_period=20, volume_factor=1.0,
+        stoch_period=14, stoch_signal=3, stoch_min=20, stoch_max=80,
+        atr_period=21, atr_min_pct=1.5, atr_max_pct=8.0,
+        ichimoku_tenkan=12, ichimoku_kijun=22, ichimoku_senkou_b=44,
+        risk_per_trade=0.02, atr_stop_factor=1.5, atr_take_profit_factor=5.0,
+    )
+    indicator_df = add_indicators(make_price_frame(), params.indicator_parameters())
+    hyperopt_df = generate_signals(indicator_df, params.strategy_parameters(enabled_hyperopt))
+    simulation_df = apply_enabled_criteria_signals(
+        hyperopt_df,
+        enabled_simulation,
+        params=params.strategy_parameters(enabled_hyperopt),
+    )
+    pd.testing.assert_series_equal(
+        hyperopt_df["ENTRY_SIGNAL"], simulation_df["ENTRY_SIGNAL"], check_names=False
+    )
