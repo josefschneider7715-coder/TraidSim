@@ -124,6 +124,7 @@ def require_login() -> None:
             if st.button(auth_tr("logout")):
                 st.session_state.pop("authenticated", None)
                 st.session_state.pop("auth_username", None)
+                st.session_state.pop("login_defaults_applied_for", None)
                 st.rerun()
         return
 
@@ -769,7 +770,19 @@ if not valid_symbols:
     st.info(tr("check_connection"))
     st.stop()
 
-selected_symbol = st.selectbox(tr("select_detail"), valid_symbols, index=0)
+current_user = str(st.session_state.get("auth_username", ""))
+if st.session_state.get("login_defaults_applied_for") != current_user:
+    if "AAPL" in valid_symbols:
+        st.session_state["selected_detail_symbol"] = "AAPL"
+    st.session_state["hyperopt2_objective_AAPL"] = "return"
+    for default_criterion in ("trend", "rsi", "macd", "bollinger", "fibonacci", "volume", "stoch", "atr", "ichimoku", "risk_management"):
+        st.session_state[f"hyperopt2_criterion_AAPL_{default_criterion}"] = True
+    st.session_state["login_defaults_applied_for"] = current_user
+
+apple_index = valid_symbols.index("AAPL") if "AAPL" in valid_symbols else 0
+selected_symbol = st.selectbox(
+    tr("select_detail"), valid_symbols, index=apple_index, key="selected_detail_symbol"
+)
 df = data_cache[selected_symbol]
 trades_df = trades_cache[selected_symbol]
 equity_df = equity_cache[selected_symbol]
@@ -1237,6 +1250,7 @@ with hyperopt2_tab:
         tr("objective"),
         list(OBJECTIVES),
         format_func=lambda value: localize_phrase(OBJECTIVES[value], language),
+        index=list(OBJECTIVES).index("return"),
         key=f"hyperopt2_objective_{selected_symbol}",
     )
     h2_criteria_defaults = {
@@ -1244,12 +1258,12 @@ with hyperopt2_tab:
         "rsi": True,
         "macd": True,
         "bollinger": True,
-        "fibonacci": False,
+        "fibonacci": True,
         "volume": True,
-        "stoch": False,
-        "atr": False,
-        "ichimoku": False,
-        "risk_management": False,
+        "stoch": True,
+        "atr": True,
+        "ichimoku": True,
+        "risk_management": True,
     }
     h2_labels = {
         "trend": "Trend", "rsi": "RSI", "macd": "MACD", "bollinger": "Bollinger",
