@@ -31,6 +31,7 @@ hyperopt_module = importlib.reload(hyperopt_module)
 telemetry_module = importlib.reload(telemetry_module)
 i18n_module = importlib.reload(i18n_module)
 localize_phrase = i18n_module.localize_phrase
+parameter_label = i18n_module.parameter_label
 translate = i18n_module.translate
 make_candlestick_chart = charts_module.make_candlestick_chart
 make_chart = charts_module.make_chart
@@ -611,7 +612,9 @@ tr = lambda key, **values: translate(key, language).format(**values)
 
 def localized_dataframe(source: pd.DataFrame) -> pd.DataFrame:
     result = source.copy()
-    result = result.rename(columns={column: localize_phrase(column, language) for column in result.columns})
+    result = result.rename(
+        columns={column: localize_phrase(parameter_label(column, language), language) for column in result.columns}
+    )
     for column in result.select_dtypes(include="object").columns:
         result[column] = result[column].map(lambda value: localize_phrase(value, language))
     return result
@@ -1264,7 +1267,9 @@ with hyperopt2_tab:
         with left_chart:
             st.write(f"### {tr('importance')}")
             importance_fig = go.Figure(go.Bar(
-                x=h2_result.importance["Importance %"], y=h2_result.importance["Parameter"], orientation="h"
+                x=h2_result.importance["Importance %"],
+                y=h2_result.importance["Parameter"].map(lambda value: parameter_label(value, language)),
+                orientation="h",
             ))
             importance_fig.update_layout(height=480, yaxis={"autorange": "reversed"}, xaxis_title="Importance %")
             st.plotly_chart(localized_figure(importance_fig), use_container_width=True)
@@ -1281,8 +1286,8 @@ with hyperopt2_tab:
                 ))
                 heatmap_fig.update_layout(
                     height=480,
-                    xaxis_title=str(h2_result.heatmap.columns.name),
-                    yaxis_title=str(h2_result.heatmap.index.name),
+                    xaxis_title=parameter_label(str(h2_result.heatmap.columns.name), language),
+                    yaxis_title=parameter_label(str(h2_result.heatmap.index.name), language),
                 )
             st.plotly_chart(localized_figure(heatmap_fig), use_container_width=True)
 
@@ -1290,7 +1295,10 @@ with hyperopt2_tab:
         sensitivity_fig = go.Figure()
         for parameter, parameter_df in h2_result.sensitivity.groupby("Parameter"):
             sensitivity_fig.add_trace(go.Scatter(
-                x=parameter_df["Wert"], y=parameter_df["Objective Mittel"], mode="lines+markers", name=parameter
+                x=parameter_df["Wert"],
+                y=parameter_df["Objective Mittel"],
+                mode="lines+markers",
+                name=parameter_label(parameter, language),
             ))
         sensitivity_fig.update_layout(height=430, xaxis_title=tr("parameter_value"), yaxis_title=tr("objective_mean"))
         st.plotly_chart(localized_figure(sensitivity_fig), use_container_width=True)
