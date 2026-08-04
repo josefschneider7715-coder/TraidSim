@@ -54,6 +54,8 @@ OBJECTIVES = hyperopt2_module.OBJECTIVES
 best_hyperopt2_parameters = hyperopt2_module.best_parameters
 recommended_criteria = hyperopt2_module.recommended_criteria
 run_hyperopt2 = hyperopt2_module.run_hyperopt2
+hyperopt2_result_to_payload = hyperopt2_module.result_to_payload
+hyperopt2_result_from_payload = hyperopt2_module.result_from_payload
 CRITERIA = telemetry_module.CRITERIA
 apply_enabled_criteria_signals = telemetry_module.apply_enabled_criteria_signals
 build_criterion_telemetry = telemetry_module.build_criterion_telemetry
@@ -1422,6 +1424,8 @@ with hyperopt2_tab:
 
             def load_saved_hyperopt_result() -> None:
                 loaded_state = load_analysis_result(current_user, selected_hyperopt_result_id, "hyperopt")
+                if isinstance(loaded_state.get("data"), dict):
+                    loaded_state["data"] = hyperopt2_result_from_payload(loaded_state["data"])
                 st.session_state[f"hyperopt2_objective_{selected_symbol}"] = loaded_state["objective"]
                 st.session_state["hyperopt2_result"] = loaded_state
                 st.session_state["loaded_hyperopt_result"] = True
@@ -1441,7 +1445,15 @@ with hyperopt2_tab:
             key=f"save_hyperopt_result_{selected_symbol}",
             disabled=not bool(h2_state and h2_state.get("symbol") == selected_symbol),
         ):
-            save_analysis_result(current_user, "hyperopt", hyperopt_save_name, selected_symbol, h2_state)
+            portable_hyperopt_state = dict(h2_state)
+            portable_hyperopt_state["data"] = hyperopt2_result_to_payload(h2_state["data"])
+            save_analysis_result(
+                current_user,
+                "hyperopt",
+                hyperopt_save_name,
+                selected_symbol,
+                portable_hyperopt_state,
+            )
             st.success(tr("result_saved"))
     if st.session_state.pop("loaded_hyperopt_result", False):
         st.success(tr("result_loaded"))

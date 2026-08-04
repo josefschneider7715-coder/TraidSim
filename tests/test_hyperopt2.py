@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.hyperopt2 import OBJECTIVES, objective_score, recommended_criteria, run_hyperopt2
+from src.hyperopt2 import (
+    OBJECTIVES,
+    objective_score,
+    recommended_criteria,
+    result_from_payload,
+    result_to_payload,
+    run_hyperopt2,
+)
 
 
 def make_price_frame(periods: int = 260) -> pd.DataFrame:
@@ -47,3 +54,12 @@ def test_hyperopt2_builds_professional_analysis_artifacts() -> None:
     recommendation = recommended_criteria(result)
     assert recommendation["trend"] is True
     assert not any(value for key, value in recommendation.items() if key != "trend")
+
+
+def test_hyperopt2_result_has_reload_safe_storage_roundtrip() -> None:
+    result = run_hyperopt2(make_price_frame(), max_trials=3, min_trades=0)
+    restored = result_from_payload(result_to_payload(result))
+    pd.testing.assert_frame_equal(restored.trials, result.trials)
+    pd.testing.assert_frame_equal(restored.importance, result.importance)
+    assert restored.stability_index == result.stability_index
+    assert restored.evaluation == result.evaluation

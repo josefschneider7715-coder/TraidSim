@@ -43,6 +43,32 @@ class Hyperopt2Result:
     evaluation: str
 
 
+def result_to_payload(result: Hyperopt2Result) -> dict[str, object]:
+    """Convert a result to a reload-safe structure for persistent storage."""
+    return {
+        "trials": result.trials,
+        "importance": result.importance,
+        "sensitivity": result.sensitivity,
+        "heatmap": result.heatmap,
+        "benchmarks": result.benchmarks,
+        "stability_index": float(result.stability_index),
+        "evaluation": str(result.evaluation),
+    }
+
+
+def result_from_payload(payload: dict[str, object]) -> Hyperopt2Result:
+    """Rebuild a Hyperopt result saved by :func:`result_to_payload`."""
+    return Hyperopt2Result(
+        trials=payload["trials"],
+        importance=payload["importance"],
+        sensitivity=payload["sensitivity"],
+        heatmap=payload["heatmap"],
+        benchmarks=payload["benchmarks"],
+        stability_index=float(payload["stability_index"]),
+        evaluation=str(payload["evaluation"]),
+    )
+
+
 def objective_score(metrics: dict, objective: str = "balanced", min_trades: int = 1) -> float:
     if objective not in OBJECTIVES:
         raise ValueError(f"Unbekanntes Optimierungsziel: {objective}")
