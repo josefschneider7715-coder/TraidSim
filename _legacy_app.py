@@ -17,7 +17,17 @@ from src.data_provider import download_data
 from src.indicators import IndicatorParameters, add_indicators
 from src.monte_carlo import MonteCarloConfig, run_monte_carlo_robustness
 from src.scoring import signal_history_payload, strategy_score
-from src.storage import create_alert_if_buy, list_watchlists, recent_alerts, recent_signal_history, save_signal_history, save_watchlist
+from src.storage import (
+    create_alert_if_buy,
+    list_analysis_results,
+    list_watchlists,
+    load_analysis_result,
+    recent_alerts,
+    recent_signal_history,
+    save_analysis_result,
+    save_signal_history,
+    save_watchlist,
+)
 from src.strategy import StrategyParameters, generate_signals
 from src import charts as charts_module
 from src import hyperopt as hyperopt_module
@@ -673,11 +683,11 @@ with st.sidebar:
         except ValueError as exc:
             st.error(str(exc))
 
-    period = st.selectbox(tr("period"), ["6mo", "1y", "2y", "5y", "10y", "max"], index=3)
-    interval = st.selectbox(tr("interval"), ["1d", "1wk", "1mo"], index=0)
-    initial_capital = st.number_input(tr("initial_capital"), value=10_000.0, min_value=100.0, step=500.0)
+    period = st.selectbox(tr("period"), ["6mo", "1y", "2y", "5y", "10y", "max"], index=3, key="period_input")
+    interval = st.selectbox(tr("interval"), ["1d", "1wk", "1mo"], index=0, key="interval_input")
+    initial_capital = st.number_input(tr("initial_capital"), value=10_000.0, min_value=100.0, step=500.0, key="initial_capital_input")
     risk_per_trade = st.slider(tr("risk_per_trade"), min_value=0.0025, max_value=0.05, value=0.01, step=0.0025, key="risk_per_trade_input")
-    fee = st.slider(tr("fee_per_order"), min_value=0.0, max_value=0.01, value=0.001, step=0.0005)
+    fee = st.slider(tr("fee_per_order"), min_value=0.0, max_value=0.01, value=0.001, step=0.0005, key="fee_input")
     atr_stop = st.slider(tr("atr_stop"), min_value=0.5, max_value=5.0, value=2.0, step=0.25, key="atr_stop_input")
     atr_tp = st.slider(tr("atr_take_profit"), min_value=0.5, max_value=8.0, value=3.0, step=0.25, key="atr_tp_input")
     st.divider()
@@ -926,6 +936,82 @@ with telemetry_tab:
     monthly_telemetry = telemetry["monthly"]
     ranking_telemetry = telemetry["ranking"]
     events_telemetry = telemetry["events"]
+
+    simulation_snapshot = {
+        "symbol": selected_symbol,
+        "period": period,
+        "interval": interval,
+        "initial_capital": initial_capital,
+        "fee": fee,
+        "sidebar_risk_per_trade": risk_per_trade,
+        "sidebar_atr_stop": atr_stop,
+        "sidebar_atr_tp": atr_tp,
+        "start_date": simulation_start_date,
+        "end_date": simulation_end_date,
+        "enabled_criteria": list(enabled_criteria),
+        "risk_management": simulation_risk_management,
+        "parameter_values": dict(parameter_values),
+        "metrics": simulation_metrics,
+        "trades": simulation_trades_df,
+        "equity": simulation_equity_df,
+        "summary": summary_telemetry,
+        "ranking": ranking_telemetry,
+    }
+    st.write(f"### {tr('saved_results')}")
+    saved_simulation_results = list_analysis_results(current_user, "simulation", selected_symbol)
+    simulation_save_name = st.text_input(
+        tr("result_name"),
+        value=f"{selected_symbol} Simulation",
+        key=f"simulation_result_name_{selected_symbol}",
+    )
+    simulation_save_col, simulation_load_col = st.columns(2)
+    with simulation_save_col:
+        if st.button(tr("save_result"), key=f"save_simulation_result_{selected_symbol}"):
+            save_analysis_result(
+                current_user,
+                "simulation",
+                simulation_save_name,
+                selected_symbol,
+                simulation_snapshot,
+            )
+            st.success(tr("result_saved"))
+    with simulation_load_col:
+        if saved_simulation_results:
+            selected_simulation_result_id = st.selectbox(
+                tr("saved_results"),
+                [item["id"] for item in saved_simulation_results],
+                format_func=lambda result_id: next(item["name"] for item in saved_simulation_results if item["id"] == result_id),
+                key=f"saved_simulation_result_{selected_symbol}",
+            )
+
+            def load_saved_simulation_result() -> None:
+                loaded = load_analysis_result(current_user, selected_simulation_result_id, "simulation")
+                st.session_state["period_input"] = loaded["period"]
+                st.session_state["interval_input"] = loaded["interval"]
+                st.session_state["initial_capital_input"] = float(loaded["initial_capital"])
+                st.session_state["fee_input"] = float(loaded["fee"])
+                st.session_state["risk_per_trade_input"] = float(loaded["sidebar_risk_per_trade"])
+                st.session_state["atr_stop_input"] = float(loaded["sidebar_atr_stop"])
+                st.session_state["atr_tp_input"] = float(loaded["sidebar_atr_tp"])
+                st.session_state[f"simulation_start_date_{selected_symbol}"] = loaded["start_date"]
+                st.session_state[f"simulation_end_date_{selected_symbol}"] = loaded["end_date"]
+                enabled = set(loaded["enabled_criteria"])
+                for criterion in CRITERIA:
+                    st.session_state[f"simulation_criterion_{selected_symbol}_{criterion.criterion_id}"] = criterion.criterion_id in enabled
+                st.session_state[f"simulation_risk_management_{selected_symbol}"] = bool(loaded["risk_management"])
+                for parameter_name, parameter_value in loaded["parameter_values"].items():
+                    st.session_state[f"simulation_value_{selected_symbol}_{parameter_name}"] = parameter_value
+                st.session_state["loaded_simulation_result"] = True
+
+            st.button(
+                tr("load_result"),
+                key=f"load_simulation_result_{selected_symbol}",
+                on_click=load_saved_simulation_result,
+            )
+        else:
+            st.info(tr("no_saved_results"))
+    if st.session_state.pop("loaded_simulation_result", False):
+        st.success(tr("result_loaded"))
 
     if summary_telemetry.empty:
         if not enabled_criteria:
@@ -1317,7 +1403,49 @@ with hyperopt2_tab:
                     ),
                 }
 
+    st.write(f"### {tr('saved_results')}")
+    saved_hyperopt_results = list_analysis_results(current_user, "hyperopt", selected_symbol)
+    hyperopt_save_name = st.text_input(
+        tr("result_name"),
+        value=f"{selected_symbol} Hyperopt",
+        key=f"hyperopt_result_name_{selected_symbol}",
+    )
+    hyperopt_save_col, hyperopt_load_col = st.columns(2)
+    with hyperopt_load_col:
+        if saved_hyperopt_results:
+            selected_hyperopt_result_id = st.selectbox(
+                tr("saved_results"),
+                [item["id"] for item in saved_hyperopt_results],
+                format_func=lambda result_id: next(item["name"] for item in saved_hyperopt_results if item["id"] == result_id),
+                key=f"saved_hyperopt_result_{selected_symbol}",
+            )
+
+            def load_saved_hyperopt_result() -> None:
+                loaded_state = load_analysis_result(current_user, selected_hyperopt_result_id, "hyperopt")
+                st.session_state[f"hyperopt2_objective_{selected_symbol}"] = loaded_state["objective"]
+                st.session_state["hyperopt2_result"] = loaded_state
+                st.session_state["loaded_hyperopt_result"] = True
+
+            st.button(
+                tr("load_result"),
+                key=f"load_hyperopt_result_{selected_symbol}",
+                on_click=load_saved_hyperopt_result,
+            )
+        else:
+            st.info(tr("no_saved_results"))
+
     h2_state = st.session_state.get("hyperopt2_result")
+    with hyperopt_save_col:
+        if st.button(
+            tr("save_result"),
+            key=f"save_hyperopt_result_{selected_symbol}",
+            disabled=not bool(h2_state and h2_state.get("symbol") == selected_symbol),
+        ):
+            save_analysis_result(current_user, "hyperopt", hyperopt_save_name, selected_symbol, h2_state)
+            st.success(tr("result_saved"))
+    if st.session_state.pop("loaded_hyperopt_result", False):
+        st.success(tr("result_loaded"))
+
     if h2_state and h2_state["symbol"] == selected_symbol and h2_state["objective"] == objective:
         h2_result = h2_state["data"]
         h2_best = best_hyperopt2_parameters(h2_result)

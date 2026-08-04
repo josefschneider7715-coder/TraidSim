@@ -142,6 +142,9 @@ Der Stabilitätsindex bewertet Streuung, positive Ergebnisse und Drawdown der be
 ### Benchmarks und CSV
 **Buy-and-Hold** zeigt passives Halten. **Oracle** nutzt perfekte Zukunftskenntnis als theoretische Obergrenze und beeinflusst niemals Signale oder Hyperopt. Der CSV-Download enthält sämtliche getesteten Kombinationen und Kennzahlen.
 
+### Ergebnisse speichern und laden
+Ein Hyperopt-Ergebnis kann unter einem frei gewählten Namen gespeichert werden. Gespeichert werden Symbol, Ziel, Kriterienauswahl, sämtliche Versuche, Diagrammdaten, Stabilität und Empfehlung. **Ergebnis laden** stellt die vollständige Auswertung für das aktuelle Symbol wieder her. Gleichnamige Einträge werden aktualisiert.
+
 ## 9. Simulation – Eingaben und Buttons
 
 ### Zeitfenster
@@ -155,6 +158,9 @@ Zeigt nur Eingaben, die zu aktivierten Kriterien gehören. Jede Änderung berech
 
 ### Simulations-Kennzahlen
 Zeigen aktive Kriterien, Zahl der Kriterienauswertungen, abgeschlossene Trades und Rendite. Darunter folgt die vollständige Backtest-Kennzahlentabelle.
+
+### Simulation speichern und laden
+Gespeichert werden Zeitraum, Intervall, Kapital, Gebühren, technische Kriterien, alle Parameter, Risikomanagement, Kennzahlen, Trades, Kapitalkurve und Ranglisten. Beim Laden werden die Eingabefelder wiederhergestellt und die Simulation mit dieser Konfiguration erneut berechnet. Ergebnisse werden je Benutzer, Typ und Name getrennt in SQLite gespeichert.
 
 ## 10. Kriterien-Telemetrie und Ranglisten
 
@@ -269,12 +275,15 @@ Checkboxes define which criteria Hyperopt may compare. Risk management allows op
 - **Stability evaluation:** summarizes dispersion, positive outcomes and drawdown among leading trials.
 - **Buy-and-Hold / Oracle:** passive benchmark and theoretical perfect-foresight upper bound. Oracle never affects signals.
 - **CSV download:** exports all trials, parameters and metrics.
+- **Save/load results:** stores or restores the complete Hyperopt state for the current user and symbol. Saving an existing name updates it.
 
 ## 7. Simulation inputs and outputs
 
 The date window restricts analysis while indicators retain sufficient history. Ten switches mirror Hyperopt. All enabled technical criteria must pass simultaneously; risk management acts on sizing and exits. The parameter expander shows only relevant values and recalculates indicators, signals, trades and results immediately.
 
 Headline metrics show active criteria, evaluations, trades and return. Detailed metrics include final capital, drawdown and win rate.
+
+Named Simulation results preserve period, interval, capital, fees, criteria, all parameters, risk settings, metrics, trades, equity and rankings. Loading restores the controls and recalculates the configuration.
 
 ## 8. Telemetry and rankings
 
@@ -359,12 +368,15 @@ TraidSim объединяет исторические данные, техни�
 - **Оценка стабильности:** учитывает разброс, положительные результаты и просадку лучших запусков.
 - **Buy-and-Hold / Oracle:** пассивный эталон и теоретическая верхняя граница. Oracle не влияет на сигналы.
 - **CSV:** все запуски, параметры и метрики.
+- **Сохранить/загрузить:** сохраняет или восстанавливает полное состояние Hyperopt для текущего пользователя и инструмента.
 
 ## 7. Симуляция
 
 Окно дат ограничивает анализ, при этом индикаторы сохраняют необходимую предысторию. Десять переключателей соответствуют Hyperopt. Все активные технические критерии должны выполняться одновременно; управление риском влияет на размер позиции и выходы. Блок параметров показывает только относящиеся к выбранным критериям значения и немедленно пересчитывает сигналы, сделки и результаты.
 
 Основные метрики показывают число активных критериев, проверок, сделок и доходность. Подробная таблица содержит конечный капитал, просадку и win rate.
+
+Именованные результаты Симуляции сохраняют период, интервал, капитал, комиссии, критерии, параметры, риск, метрики, сделки, капитал и рейтинги. При загрузке элементы управления восстанавливаются, а конфигурация пересчитывается.
 
 ## 8. Телеметрия и рейтинги
 

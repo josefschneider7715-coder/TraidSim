@@ -189,6 +189,10 @@ TRANSLATIONS["de"].update({
     "h2_value": "Empfohlener Wert", "h2_details": "Vergleich und technische Detailauswertung",
     "h2_apply_simulation": "Empfehlung vollständig in Simulation übernehmen",
     "h2_applied_simulation": "Kriterien, Parameter und Risikomanagement wurden in die Simulation übernommen.",
+    "saved_results": "Gespeicherte Ergebnisse", "result_name": "Ergebnis speichern als",
+    "save_result": "Ergebnis speichern", "load_result": "Ergebnis laden",
+    "no_saved_results": "Noch keine passenden Ergebnisse gespeichert.",
+    "result_saved": "Ergebnis wurde gespeichert.", "result_loaded": "Ergebnis wurde geladen.",
 })
 TRANSLATIONS["en"].update({
     "simulation_parameter_values": "Set values for active criteria",
@@ -199,6 +203,10 @@ TRANSLATIONS["en"].update({
     "h2_value": "Recommended value", "h2_details": "Comparison and technical details",
     "h2_apply_simulation": "Apply full recommendation to simulation",
     "h2_applied_simulation": "Criteria, parameters and risk management were applied to the simulation.",
+    "saved_results": "Saved results", "result_name": "Save result as",
+    "save_result": "Save result", "load_result": "Load result",
+    "no_saved_results": "No matching results have been saved yet.",
+    "result_saved": "Result was saved.", "result_loaded": "Result was loaded.",
 })
 TRANSLATIONS["ru"].update({
     "simulation_parameter_values": "Настроить значения активных критериев",
@@ -209,6 +217,10 @@ TRANSLATIONS["ru"].update({
     "h2_value": "Рекомендуемое значение", "h2_details": "Сравнение и технические детали",
     "h2_apply_simulation": "Полностью перенести рекомендацию в симуляцию",
     "h2_applied_simulation": "Критерии, параметры и управление риском перенесены в симуляцию.",
+    "saved_results": "Сохранённые результаты", "result_name": "Сохранить результат как",
+    "save_result": "Сохранить результат", "load_result": "Загрузить результат",
+    "no_saved_results": "Подходящие результаты ещё не сохранены.",
+    "result_saved": "Результат сохранён.", "result_loaded": "Результат загружен.",
 })
 
 PHRASES = {
