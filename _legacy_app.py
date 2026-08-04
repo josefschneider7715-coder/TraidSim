@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import hmac
@@ -791,7 +791,7 @@ metrics = metrics_cache[selected_symbol]
 score = strategy_score(df)
 
 overview_tab, hyperopt2_tab, telemetry_tab, documentation_tab = st.tabs(
-    [tr("overview"), "Hyperopt 2", tr("simulation"), tr("documentation")]
+    [tr("overview"), "Hyperopt", tr("simulation"), tr("documentation")]
 )
 
 with overview_tab:
@@ -1134,7 +1134,7 @@ with overview_tab:
     st.write(f"### {tr('backtest_metrics')}")
     st.dataframe(localized_dataframe(format_metrics(metrics)), use_container_width=True)
     
-if False:  # Alter Hyperopt-Reiter deaktiviert; Hyperopt 2 ist der alleinige Optimierungsbereich.
+if False:  # Alter Optimierungsbereich deaktiviert; der neue Hyperopt-Bereich wird weiter unten gerendert.
     if enable_hyperopt:
         st.write("### Hyperopt")
         st.caption(tr("hyperopt_help"))
@@ -1270,7 +1270,7 @@ if False:  # Alter Hyperopt-Reiter deaktiviert; Hyperopt 2 ist der alleinige Opt
             st.info(tr("hyperopt_not_started"))
 
 with hyperopt2_tab:
-    st.subheader("Hyperopt 2")
+    st.subheader("Hyperopt")
     st.caption(tr("h2_help"))
     st.info(tr("h2_selection_help"))
     objective = st.selectbox(
@@ -1348,7 +1348,7 @@ with hyperopt2_tab:
                 make_hyperopt_convergence_chart(
                     h2_result.trials,
                     selected_symbol,
-                    optimizer_name="Hyperopt 2",
+                    optimizer_name="Hyperopt",
                 )
             ),
             use_container_width=True,
@@ -1483,7 +1483,7 @@ with hyperopt2_tab:
         st.download_button(
             tr("h2_download"),
             localized_dataframe(h2_result.trials).to_csv(index=False).encode("utf-8-sig"),
-            f"{selected_symbol}_hyperopt2.csv",
+            f"{selected_symbol}_hyperopt.csv",
             "text/csv",
         )
     else:
@@ -1491,9 +1491,9 @@ with hyperopt2_tab:
 
 with documentation_tab:
     documentation = {
-        "de": """### Benutzerhandbuch\n1. Watchlist und Zeitraum links wählen.\n2. In **Übersicht** Signale und Backtest prüfen.\n3. Mit **Simulation** Kriterien testen.\n4. In **Hyperopt 2** Ziel wählen und Optimierung starten.\n\n### Architektur\nMarktdaten → Indikatoren → gemeinsame Signal-Engine → Backtest → Optimierung/Visualisierung.\n\n### Roadmap\nWalk-forward-Validierung, persistente Optimierungsläufe, weitere Datenanbieter und Benachrichtigungen.\n\n### Changelog\n- Hyperopt 2 mit Mehrzieloptimierung, Importance, Heatmaps, Sensitivität und Stabilitätsindex\n- Dokumentations-Reiter\n- Sprachauswahl Deutsch/Englisch/Russisch\n\n### API und Kontext-Hilfe\nDie Kernfunktionen liegen in `src/`. Tooltips und Erläuterungen befinden sich unmittelbar an den Eingaben.\n\n### Ideen\nPortfolio-Optimierung, Out-of-sample-Ranglisten und automatische Strategieberichte.""",
-        "en": """### User guide\n1. Select watchlist and period in the sidebar.\n2. Review signals and backtest in **Overview**.\n3. Test criteria in **Simulation**.\n4. Select an objective in **Hyperopt 2** and run it.\n\n### Architecture\nMarket data → indicators → shared signal engine → backtest → optimization/visualization.\n\n### Roadmap\nWalk-forward validation, persistent optimization runs, additional providers and notifications.\n\n### Changelog\n- Hyperopt 2 with multi-objective scoring, importance, heatmaps, sensitivity and stability index\n- Documentation tab\n- German/English/Russian language selector\n\n### API and context help\nCore functions live in `src/`; explanations are shown next to relevant controls.""",
-        "ru": """### Руководство\n1. Выберите список инструментов и период слева.\n2. Проверьте сигналы и бэктест в **Обзоре**.\n3. Тестируйте критерии в **Симуляции**.\n4. Выберите цель в **Hyperopt 2** и запустите оптимизацию.\n\n### Архитектура\nРыночные данные → индикаторы → единый модуль сигналов → бэктест → оптимизация и визуализация.\n\n### План\nWalk-forward проверка, сохранение запусков, новые источники данных и уведомления.\n\n### Изменения\n- Hyperopt 2: несколько целей, важность, тепловые карты, чувствительность и стабильность\n- Вкладка документации\n- Выбор немецкого, английского и русского языков.""",
+        "de": """### Benutzerhandbuch\n1. Watchlist und Zeitraum links wählen.\n2. In **Übersicht** Signale und Backtest prüfen.\n3. Mit **Simulation** Kriterien testen.\n4. In **Hyperopt** Ziel wählen und Optimierung starten.\n\n### Architektur\nMarktdaten → Indikatoren → gemeinsame Signal-Engine → Backtest → Optimierung/Visualisierung.\n\n### Roadmap\nWalk-forward-Validierung, persistente Optimierungsläufe, weitere Datenanbieter und Benachrichtigungen.\n\n### Changelog\n- Hyperopt mit Mehrzieloptimierung, Importance, Heatmaps, Sensitivität und Stabilitätsindex\n- Dokumentations-Reiter\n- Sprachauswahl Deutsch/Englisch/Russisch\n\n### API und Kontext-Hilfe\nDie Kernfunktionen liegen in `src/`. Tooltips und Erläuterungen befinden sich unmittelbar an den Eingaben.\n\n### Ideen\nPortfolio-Optimierung, Out-of-sample-Ranglisten und automatische Strategieberichte.""",
+        "en": """### User guide\n1. Select watchlist and period in the sidebar.\n2. Review signals and backtest in **Overview**.\n3. Test criteria in **Simulation**.\n4. Select an objective in **Hyperopt** and run it.\n\n### Architecture\nMarket data → indicators → shared signal engine → backtest → optimization/visualization.\n\n### Roadmap\nWalk-forward validation, persistent optimization runs, additional providers and notifications.\n\n### Changelog\n- Hyperopt with multi-objective scoring, importance, heatmaps, sensitivity and stability index\n- Documentation tab\n- German/English/Russian language selector\n\n### API and context help\nCore functions live in `src/`; explanations are shown next to relevant controls.""",
+        "ru": """### Руководство\n1. Выберите список инструментов и период слева.\n2. Проверьте сигналы и бэктест в **Обзоре**.\n3. Тестируйте критерии в **Симуляции**.\n4. Выберите цель в **Hyperopt** и запустите оптимизацию.\n\n### Архитектура\nРыночные данные → индикаторы → единый модуль сигналов → бэктест → оптимизация и визуализация.\n\n### План\nWalk-forward проверка, сохранение запусков, новые источники данных и уведомления.\n\n### Изменения\n- Hyperopt: несколько целей, важность, тепловые карты, чувствительность и стабильность\n- Вкладка документации\n- Выбор немецкого, английского и русского языков.""",
     }
     st.markdown(documentation[language])
 

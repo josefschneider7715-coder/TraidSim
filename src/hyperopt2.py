@@ -225,7 +225,7 @@ def run_hyperopt2(
     oracle = _oracle_metrics(price_df, initial_capital)
     benchmarks = pd.DataFrame(
         [
-            {"Vergleich": "Hyperopt 2", "Rendite %": best["Gesamtrendite %"], "Endkapital": best["Endkapital"]},
+            {"Vergleich": "Hyperopt", "Rendite %": best["Gesamtrendite %"], "Endkapital": best["Endkapital"]},
             {"Vergleich": "Buy & Hold", "Rendite %": buy_hold.get("BuyHold Rendite %", 0.0), "Endkapital": buy_hold.get("BuyHold Endkapital", initial_capital)},
             {"Vergleich": "Oracle", "Rendite %": oracle["Oracle Rendite %"], "Endkapital": oracle["Oracle Endkapital"]},
         ]

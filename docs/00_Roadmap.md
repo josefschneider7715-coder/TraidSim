@@ -11,9 +11,9 @@ Statuslegende: 🟢 fertig · 🟡 in Arbeit · 🔵 geplant · 🔴 verworfen
 - 🟡 Ideen- und Entscheidungsprotokoll
 - 🔵 Kontextbezogene Hilfe bei Kennzahlen und Funktionen
 
-## Version 1.1 – Hyperopt 2
+## Version 1.1 – Hyperopt
 
-- 🟡 Eigener Hauptreiter „Hyperopt 2“
+- 🟡 Eigener Hauptreiter „Hyperopt“
 - 🟡 Gleiche Einstiegssignale wie in der Simulation
 - 🟡 Optimierungsziele: maximaler Gewinn, Gewinn minus Drawdown, ausgewogen
 - 🟡 Rangliste der wichtigsten Gewinnparameter

@@ -41,7 +41,7 @@ def test_hyperopt2_builds_professional_analysis_artifacts() -> None:
     assert not result.importance.empty
     assert not result.sensitivity.empty
     assert len(result.benchmarks) == 3
-    assert set(result.benchmarks["Vergleich"]) == {"Hyperopt 2", "Buy & Hold", "Oracle"}
+    assert set(result.benchmarks["Vergleich"]) == {"Hyperopt", "Buy & Hold", "Oracle"}
     assert 0 <= result.stability_index <= 100
     assert "Stabilitaetsindex" in result.evaluation
     recommendation = recommended_criteria(result)
