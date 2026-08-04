@@ -484,31 +484,6 @@ def make_monte_carlo_paths_chart(paths_df: pd.DataFrame, symbol: str):
     return fig
 
 
-def make_criterion_heatmap(period_df: pd.DataFrame, value_column: str, title: str):
-    if period_df.empty:
-        return go.Figure()
-
-    pivot = period_df.pivot_table(index="Kriterium", columns="Periode", values=value_column, aggfunc="sum", fill_value=0)
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=pivot.values,
-            x=pivot.columns,
-            y=pivot.index,
-            colorscale=[
-                [0.0, "#e5e7eb"],
-                [0.25, "#60a5fa"],
-                [0.5, "#facc15"],
-                [0.75, "#22c55e"],
-                [1.0, "#7c3aed"],
-            ],
-            colorbar={"title": value_column.replace("_", " ")},
-            hovertemplate="Kriterium: %{y}<br>Periode: %{x}<br>Wert: %{z}<extra></extra>",
-        )
-    )
-    fig.update_layout(title=title, height=430, xaxis_title="Periode", yaxis_title="Kriterium")
-    return fig
-
-
 language = str(st.query_params.get("lang", "de"))
 if language not in {"de", "en", "ru"}:
     language = "de"
@@ -1029,23 +1004,6 @@ with telemetry_tab:
             ]),
             use_container_width=True,
         )
-
-        period_mode = st.radio(tr("heatmap_period"), ["Wochen", "Monate"], format_func=lambda value: tr("weeks") if value == "Wochen" else tr("months"), horizontal=True)
-        value_column = st.selectbox(
-            tr("metric"),
-            [
-                "Auswertungen",
-                "Ausloeser",
-                "Blockierungen",
-                "Unterstuetzend",
-                "Entscheidende_Ereignisse",
-                "Rendite_Pct",
-                "Verpasste_Gewinne_Pct",
-            ],
-            format_func=lambda value: localize_phrase(value, language),
-        )
-        period_df = weekly_telemetry if period_mode == "Wochen" else monthly_telemetry
-        st.plotly_chart(localized_figure(make_criterion_heatmap(period_df, value_column, f"{period_mode}: {value_column}")), use_container_width=True)
 
         st.write(f"### {tr('aggregates')}")
         sub_tab_week, sub_tab_month, sub_tab_events = st.tabs([tr("weeks"), tr("months"), tr("signal_events")])

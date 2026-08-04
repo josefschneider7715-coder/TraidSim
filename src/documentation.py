@@ -169,8 +169,8 @@ Zeigen aktive Kriterien, Zahl der Kriterienauswertungen, abgeschlossene Trades u
 
 Eine negative Bewertung bedeutet, dass das Kriterium im untersuchten Zeitraum ungünstig mit den Ergebnissen zusammenhing. Sie beweist nicht, dass der Indikator grundsätzlich ungeeignet ist.
 
-### Wochen-/Monats-Heatmap und Signalereignisse
-Die Heatmap zeigt zeitliche Stabilität der Kriterien. Die Ereignistabelle macht einzelne Prüfungen und ihre späteren Kursbewegungen nachvollziehbar. Beide Ansichten helfen, ein nur in kurzen Marktphasen funktionierendes Kriterium zu erkennen.
+### Wochen-/Monatsaggregate und Signalereignisse
+Die Tabellen fassen Kriterienwerte nach Wochen und Monaten zusammen. Die Ereignistabelle macht einzelne Prüfungen und ihre späteren Kursbewegungen nachvollziehbar. Diese Ansichten helfen, ein nur in kurzen Marktphasen funktionierendes Kriterium zu erkennen.
 
 ### Monte-Carlo-Zukunftssimulation
 Erzeugt viele mögliche Ein-Jahres-Pfade aus historischen Renditen und führt die Strategie darauf aus. Pfadanzahl und Zufalls-Seed steuern Umfang und Reproduzierbarkeit. Das Ergebnis ist ein Robustheitstest unter modellierten Szenarien, keine Kursprognose.
@@ -280,7 +280,7 @@ Headline metrics show active criteria, evaluations, trades and return. Detailed 
 
 Telemetry counts evaluations, passes, triggers, blocks, supporting and decisive events. The relevance score combines decision influence, profit, risk and stability. Ratings such as highly relevant, negatively acting or insufficiently observed describe the selected historical window only.
 
-Weekly/monthly heatmaps reveal regime dependence. Signal events provide row-level traceability. Monte Carlo generates possible one-year paths from historical returns and is a robustness test, not a price forecast. Strategy comparison contrasts active rules with Buy-and-Hold and Oracle.
+Weekly/monthly aggregate tables reveal regime dependence. Signal events provide row-level traceability. Monte Carlo generates possible one-year paths from historical returns and is a robustness test, not a price forecast. Strategy comparison contrasts active rules with Buy-and-Hold and Oracle.
 
 ## 9. Architecture
 
@@ -370,7 +370,7 @@ TraidSim объединяет исторические данные, техни�
 
 Телеметрия считает проверки, выполнения, триггеры, блокировки, поддерживающие и решающие события. Релевантность объединяет влияние на решения, прибыль, риск и стабильность. Оценки относятся только к выбранному историческому периоду.
 
-Недельные и месячные карты показывают зависимость от рыночного режима. События обеспечивают построчную проверяемость. Monte Carlo создаёт возможные годовые траектории из исторических доходностей и служит тестом устойчивости, а не прогнозом. Сравнение сопоставляет стратегию, Buy-and-Hold и Oracle.
+Недельные и месячные сводные таблицы показывают зависимость от рыночного режима. События обеспечивают построчную проверяемость. Monte Carlo создаёт возможные годовые траектории из исторических доходностей и служит тестом устойчивости, а не прогнозом. Сравнение сопоставляет стратегию, Buy-and-Hold и Oracle.
 
 ## 9. Архитектура
 
