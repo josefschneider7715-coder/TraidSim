@@ -790,8 +790,8 @@ equity_df = equity_cache[selected_symbol]
 metrics = metrics_cache[selected_symbol]
 score = strategy_score(df)
 
-overview_tab, hyperopt_tab, hyperopt2_tab, telemetry_tab, documentation_tab = st.tabs(
-    [tr("overview"), "Hyperopt", "Hyperopt 2", tr("simulation"), tr("documentation")]
+overview_tab, hyperopt2_tab, telemetry_tab, documentation_tab = st.tabs(
+    [tr("overview"), "Hyperopt 2", tr("simulation"), tr("documentation")]
 )
 
 with overview_tab:
@@ -1134,7 +1134,7 @@ with overview_tab:
     st.write(f"### {tr('backtest_metrics')}")
     st.dataframe(localized_dataframe(format_metrics(metrics)), use_container_width=True)
     
-with hyperopt_tab:
+if False:  # Alter Hyperopt-Reiter deaktiviert; Hyperopt 2 ist der alleinige Optimierungsbereich.
     if enable_hyperopt:
         st.write("### Hyperopt")
         st.caption(tr("hyperopt_help"))
