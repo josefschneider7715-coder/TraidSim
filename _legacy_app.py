@@ -517,6 +517,29 @@ language_handoff = create_language_handoff(str(st.session_state.get("auth_userna
 st.markdown(
     f"""
     <style>
+    html, body, .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stAppViewContainer"] > .main {{
+        background-color: #000000 !important;
+    }}
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stBottom"] {{
+        background-color: #000000 !important;
+    }}
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarContent"] {{
+        background-color: #080808 !important;
+    }}
+    [data-testid="stSidebar"] input,
+    [data-testid="stSidebar"] textarea,
+    [data-testid="stSidebar"] [data-baseweb="select"] > div,
+    [data-testid="stAppViewContainer"] input,
+    [data-testid="stAppViewContainer"] textarea,
+    [data-testid="stAppViewContainer"] [data-baseweb="select"] > div {{
+        background-color: #141414 !important;
+    }}
     .traidsim-language-picker {{
         position: fixed;
         top: 0.55rem;
@@ -628,6 +651,11 @@ def localized_dataframe(source: pd.DataFrame) -> pd.DataFrame:
 
 
 def localized_figure(figure):
+    figure.update_layout(
+        paper_bgcolor="#000000",
+        plot_bgcolor="#000000",
+        font={"color": "#f8fafc"},
+    )
     if language == "de":
         return figure
     if getattr(figure.layout, "title", None) and figure.layout.title.text:
