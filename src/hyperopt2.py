@@ -29,6 +29,8 @@ METRIC_COLUMNS = {
     "Endkapital",
 }
 
+OPTIMIZABLE_CRITERIA = ("trend", "rsi", "macd", "bollinger", "fibonacci", "volume", "stoch", "atr", "ichimoku")
+
 
 @dataclass(frozen=True)
 class Hyperopt2Result:
@@ -174,12 +176,20 @@ def run_hyperopt2(
 ) -> Hyperopt2Result:
     rows: list[dict] = []
     optimize_risk = enabled_criteria is None or enabled_criteria.get("risk_management", True)
+    allowed_criteria = [key for key in OPTIMIZABLE_CRITERIA if enabled_criteria is None or enabled_criteria.get(key, False)]
+    criteria_rng = np.random.default_rng(seed + 10_000)
     for trial_number, params in enumerate(_candidate_grid(max_trials=max_trials, seed=seed), start=1):
+        trial_criteria = {key: False for key in OPTIMIZABLE_CRITERIA}
+        for key in allowed_criteria:
+            trial_criteria[key] = bool(criteria_rng.random() < 0.65)
+        if allowed_criteria and not any(trial_criteria.values()):
+            trial_criteria[allowed_criteria[(trial_number - 1) % len(allowed_criteria)]] = True
+        trial_criteria["risk_management"] = optimize_risk
         trial_risk = params.risk_per_trade if optimize_risk else risk_per_trade
         trial_stop = params.atr_stop_factor if optimize_risk else atr_stop_factor
         trial_take_profit = params.atr_take_profit_factor if optimize_risk else atr_take_profit_factor
         indicator_df = add_indicators(price_df, params.indicator_parameters())
-        signal_df = generate_signals(indicator_df, params.strategy_parameters(enabled_criteria))
+        signal_df = generate_signals(indicator_df, params.strategy_parameters(trial_criteria))
         trades, equity = backtest(
             signal_df,
             initial_capital=initial_capital,
@@ -195,6 +205,7 @@ def run_hyperopt2(
             {
                 "Durchlauf": trial_number,
                 **values,
+                **{f"criterion_{key}": value for key, value in trial_criteria.items() if key != "risk_management"},
                 "Objective": objective_score(metrics, objective, min_trades),
                 "Gesamtrendite %": metrics.get("Gesamtrendite %", 0.0),
                 "Max. Drawdown %": metrics.get("Max. Drawdown %", 0.0),
@@ -232,3 +243,14 @@ def run_hyperopt2(
 
 def best_parameters(result: Hyperopt2Result) -> HyperoptParameters | None:
     return best_hyperopt_parameters(result.trials)
+
+
+def recommended_criteria(result: Hyperopt2Result) -> dict[str, bool]:
+    if result.trials.empty:
+        return {}
+    best = result.trials.iloc[0]
+    return {
+        key: bool(best.get(f"criterion_{key}", False))
+        for key in OPTIMIZABLE_CRITERIA
+        if f"criterion_{key}" in result.trials.columns
+    }

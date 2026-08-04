@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.hyperopt2 import OBJECTIVES, objective_score, run_hyperopt2
+from src.hyperopt2 import OBJECTIVES, objective_score, recommended_criteria, run_hyperopt2
 
 
 def make_price_frame(periods: int = 260) -> pd.DataFrame:
@@ -44,3 +44,6 @@ def test_hyperopt2_builds_professional_analysis_artifacts() -> None:
     assert set(result.benchmarks["Vergleich"]) == {"Hyperopt 2", "Buy & Hold", "Oracle"}
     assert 0 <= result.stability_index <= 100
     assert "Stabilitaetsindex" in result.evaluation
+    recommendation = recommended_criteria(result)
+    assert recommendation["trend"] is True
+    assert not any(value for key, value in recommendation.items() if key != "trend")

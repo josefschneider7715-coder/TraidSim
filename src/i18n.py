@@ -183,14 +183,26 @@ TRANSLATIONS = {
 TRANSLATIONS["de"].update({
     "simulation_parameter_values": "Werte der aktiven Kriterien einstellen",
     "simulation_parameter_help": "Änderungen werden sofort auf Indikatoren, Einstiegssignale, Trades und Auswertung angewendet.",
+    "h2_selection_help": "Die Häkchen legen fest, welche Kriterien Hyperopt 2 miteinander vergleichen darf. Das Endergebnis wählt daraus die beste Kombination.",
+    "h2_recommendation": "Empfohlene Strategie-Konfiguration", "h2_recommended_criteria": "Empfohlene Kriterien",
+    "h2_recommended_values": "Empfohlene Parameterwerte", "h2_use": "Verwenden", "h2_parameter": "Parameter",
+    "h2_value": "Empfohlener Wert", "h2_details": "Vergleich und technische Detailauswertung",
 })
 TRANSLATIONS["en"].update({
     "simulation_parameter_values": "Set values for active criteria",
     "simulation_parameter_help": "Changes are applied immediately to indicators, entry signals, trades and evaluation.",
+    "h2_selection_help": "The checkboxes define which criteria Hyperopt 2 may compare. The result selects the best combination from them.",
+    "h2_recommendation": "Recommended strategy configuration", "h2_recommended_criteria": "Recommended criteria",
+    "h2_recommended_values": "Recommended parameter values", "h2_use": "Use", "h2_parameter": "Parameter",
+    "h2_value": "Recommended value", "h2_details": "Comparison and technical details",
 })
 TRANSLATIONS["ru"].update({
     "simulation_parameter_values": "Настроить значения активных критериев",
     "simulation_parameter_help": "Изменения сразу применяются к индикаторам, сигналам входа, сделкам и анализу.",
+    "h2_selection_help": "Флажки задают критерии, которые Hyperopt 2 может сравнивать. В результате выбирается лучшая комбинация.",
+    "h2_recommendation": "Рекомендуемая конфигурация стратегии", "h2_recommended_criteria": "Рекомендуемые критерии",
+    "h2_recommended_values": "Рекомендуемые значения параметров", "h2_use": "Использовать", "h2_parameter": "Параметр",
+    "h2_value": "Рекомендуемое значение", "h2_details": "Сравнение и технические детали",
 })
 
 PHRASES = {
@@ -369,4 +381,8 @@ def parameter_label(parameter: object, language: str = "de") -> object:
     if not isinstance(parameter, str):
         return parameter
     selected_language = language if language in PARAMETER_LABELS else "de"
+    if parameter.startswith("criterion_"):
+        criterion = parameter.removeprefix("criterion_").replace("stoch", "Stochastik").replace("volume", "Volumen")
+        prefix = {"de": "Kriterium", "en": "Criterion", "ru": "Критерий"}[selected_language]
+        return f"{prefix} – {criterion.title()}"
     return PARAMETER_LABELS[selected_language].get(parameter, parameter)

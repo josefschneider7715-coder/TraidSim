@@ -22,7 +22,7 @@ from src.strategy import StrategyParameters, generate_signals
 from src import charts as charts_module
 from src import hyperopt as hyperopt_module
 from src import telemetry as telemetry_module
-from src.hyperopt2 import OBJECTIVES, best_parameters as best_hyperopt2_parameters, run_hyperopt2
+from src.hyperopt2 import OBJECTIVES, best_parameters as best_hyperopt2_parameters, recommended_criteria, run_hyperopt2
 from src import i18n as i18n_module
 
 
@@ -1227,6 +1227,7 @@ with hyperopt_tab:
 with hyperopt2_tab:
     st.subheader("Hyperopt 2")
     st.caption(tr("h2_help"))
+    st.info(tr("h2_selection_help"))
     objective = st.selectbox(
         tr("objective"),
         list(OBJECTIVES),
@@ -1268,6 +1269,7 @@ with hyperopt2_tab:
                 st.session_state["hyperopt2_result"] = {
                     "symbol": selected_symbol,
                     "objective": objective,
+                    "criteria": h2_criteria.copy(),
                     "data": run_hyperopt2(
                         df,
                         initial_capital=initial_capital,
@@ -1286,6 +1288,7 @@ with hyperopt2_tab:
     if h2_state and h2_state["symbol"] == selected_symbol and h2_state["objective"] == objective:
         h2_result = h2_state["data"]
         h2_best = best_hyperopt2_parameters(h2_result)
+        h2_recommended = recommended_criteria(h2_result)
         metric_a, metric_b, metric_c, metric_d = st.columns(4)
         best_row = h2_result.trials.iloc[0]
         metric_a.metric(tr("yield"), f"{best_row['Gesamtrendite %']:.2f} %")
@@ -1293,10 +1296,55 @@ with hyperopt2_tab:
         metric_c.metric(tr("trades"), int(best_row["Abgeschlossene Trades"]))
         metric_d.metric(tr("stability"), f"{h2_result.stability_index:.1f}/100")
 
-        st.write(f"### {tr('results')}")
-        st.dataframe(localized_dataframe(h2_result.benchmarks).style.format({localize_phrase("Rendite %", language): "{:.2f}", localize_phrase("Endkapital", language): "{:.2f}"}), use_container_width=True)
+        st.write(f"### {tr('h2_recommendation')}")
         if h2_best is not None:
-            st.dataframe(localized_dataframe(pd.DataFrame([h2_best.__dict__])), use_container_width=True)
+            criterion_names = {
+                "trend": "Trend", "rsi": "RSI", "macd": "MACD", "bollinger": "Bollinger",
+                "fibonacci": "Fibonacci", "volume": "Volumen", "stoch": "Stochastik",
+                "atr": "ATR", "ichimoku": "Ichimoku",
+            }
+            active_h2_criteria = [key for key, active in h2_recommended.items() if active]
+            criterion_rows = [
+                {
+                    tr("criterion"): localize_phrase(criterion_names[key], language),
+                    tr("h2_use"): tr("yes") if h2_recommended.get(key, False) else tr("no"),
+                }
+                for key in criterion_names if key in h2_recommended
+            ]
+            st.write(f"#### {tr('h2_recommended_criteria')}")
+            st.dataframe(pd.DataFrame(criterion_rows), use_container_width=True, hide_index=True)
+
+            parameter_groups = {
+                "trend": ["sma_trend_period"],
+                "rsi": ["rsi_period", "rsi_min", "rsi_max", "exit_rsi_max"],
+                "macd": ["macd_fast", "macd_slow", "macd_signal"],
+                "bollinger": ["bb_period", "bb_std"],
+                "fibonacci": ["fib_lookback"],
+                "volume": ["volume_period", "volume_factor"],
+                "stoch": ["stoch_period", "stoch_signal", "stoch_min", "stoch_max"],
+                "atr": ["atr_period", "atr_min_pct", "atr_max_pct"],
+                "ichimoku": ["ichimoku_tenkan", "ichimoku_kijun", "ichimoku_senkou_b"],
+            }
+            parameter_rows = []
+            for criterion_key in active_h2_criteria:
+                for parameter_name in parameter_groups[criterion_key]:
+                    parameter_rows.append({
+                        tr("criterion"): localize_phrase(criterion_names[criterion_key], language),
+                        tr("h2_parameter"): parameter_label(parameter_name, language),
+                        tr("h2_value"): getattr(h2_best, parameter_name),
+                    })
+            if h2_state.get("criteria", {}).get("risk_management", False):
+                for parameter_name in ("risk_per_trade", "atr_stop_factor", "atr_take_profit_factor"):
+                    parameter_rows.append({
+                        tr("criterion"): localize_phrase("Risikomanagement", language),
+                        tr("h2_parameter"): parameter_label(parameter_name, language),
+                        tr("h2_value"): getattr(h2_best, parameter_name),
+                    })
+            st.write(f"#### {tr('h2_recommended_values')}")
+            st.dataframe(pd.DataFrame(parameter_rows), use_container_width=True, hide_index=True)
+
+        with st.expander(tr("h2_details")):
+            st.dataframe(localized_dataframe(h2_result.benchmarks).style.format({localize_phrase("Rendite %", language): "{:.2f}", localize_phrase("Endkapital", language): "{:.2f}"}), use_container_width=True)
 
         left_chart, right_chart = st.columns(2)
         with left_chart:
