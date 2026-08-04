@@ -671,10 +671,10 @@ with st.sidebar:
     period = st.selectbox(tr("period"), ["6mo", "1y", "2y", "5y", "10y", "max"], index=3)
     interval = st.selectbox(tr("interval"), ["1d", "1wk", "1mo"], index=0)
     initial_capital = st.number_input(tr("initial_capital"), value=10_000.0, min_value=100.0, step=500.0)
-    risk_per_trade = st.slider(tr("risk_per_trade"), min_value=0.0025, max_value=0.05, value=0.01, step=0.0025)
+    risk_per_trade = st.slider(tr("risk_per_trade"), min_value=0.0025, max_value=0.05, value=0.01, step=0.0025, key="risk_per_trade_input")
     fee = st.slider(tr("fee_per_order"), min_value=0.0, max_value=0.01, value=0.001, step=0.0005)
-    atr_stop = st.slider(tr("atr_stop"), min_value=0.5, max_value=5.0, value=2.0, step=0.25)
-    atr_tp = st.slider(tr("atr_take_profit"), min_value=0.5, max_value=8.0, value=3.0, step=0.25)
+    atr_stop = st.slider(tr("atr_stop"), min_value=0.5, max_value=5.0, value=2.0, step=0.25, key="atr_stop_input")
+    atr_tp = st.slider(tr("atr_take_profit"), min_value=0.5, max_value=8.0, value=3.0, step=0.25, key="atr_tp_input")
     st.divider()
     enable_hyperopt = st.checkbox(tr("show_hyperopt"), value=True)
     hyperopt_trials = st.slider(tr("hyperopt_trials"), min_value=50, max_value=2000, value=500, step=50)
@@ -1347,6 +1347,36 @@ with hyperopt2_tab:
                     })
             st.write(f"#### {tr('h2_recommended_values')}")
             st.dataframe(pd.DataFrame(parameter_rows), use_container_width=True, hide_index=True)
+
+            criterion_widget_ids = {
+                "trend": "trend_filter", "rsi": "rsi_filter", "macd": "macd_filter",
+                "bollinger": "bollinger_filter", "fibonacci": "fibonacci_filter",
+                "volume": "volume_filter", "stoch": "stochastic_filter", "atr": "atr_filter",
+                "ichimoku": "ichimoku_filter",
+            }
+
+            def apply_h2_to_simulation() -> None:
+                for criterion_key, criterion_id in criterion_widget_ids.items():
+                    st.session_state[f"simulation_criterion_{selected_symbol}_{criterion_id}"] = bool(
+                        h2_recommended.get(criterion_key, False)
+                    )
+                for parameter_name in hyperopt_module.HyperoptParameters.__dataclass_fields__:
+                    if parameter_name in IndicatorParameters.__dataclass_fields__ or parameter_name in StrategyParameters.__dataclass_fields__:
+                        st.session_state[f"simulation_value_{selected_symbol}_{parameter_name}"] = getattr(h2_best, parameter_name)
+                if h2_state.get("criteria", {}).get("risk_management", False):
+                    st.session_state["risk_per_trade_input"] = float(h2_best.risk_per_trade)
+                    st.session_state["atr_stop_input"] = float(h2_best.atr_stop_factor)
+                    st.session_state["atr_tp_input"] = float(h2_best.atr_take_profit_factor)
+                st.session_state["h2_applied_to_simulation"] = True
+
+            st.button(
+                tr("h2_apply_simulation"),
+                type="primary",
+                key=f"apply_h2_simulation_{selected_symbol}",
+                on_click=apply_h2_to_simulation,
+            )
+            if st.session_state.pop("h2_applied_to_simulation", False):
+                st.success(tr("h2_applied_simulation"))
 
         with st.expander(tr("h2_details")):
             st.dataframe(localized_dataframe(h2_result.benchmarks).style.format({localize_phrase("Rendite %", language): "{:.2f}", localize_phrase("Endkapital", language): "{:.2f}"}), use_container_width=True)

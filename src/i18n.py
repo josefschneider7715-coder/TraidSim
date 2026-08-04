@@ -187,6 +187,8 @@ TRANSLATIONS["de"].update({
     "h2_recommendation": "Empfohlene Strategie-Konfiguration", "h2_recommended_criteria": "Empfohlene Kriterien",
     "h2_recommended_values": "Empfohlene Parameterwerte", "h2_use": "Verwenden", "h2_parameter": "Parameter",
     "h2_value": "Empfohlener Wert", "h2_details": "Vergleich und technische Detailauswertung",
+    "h2_apply_simulation": "Empfehlung vollständig in Simulation übernehmen",
+    "h2_applied_simulation": "Kriterien, Parameter und Risikomanagement wurden in die Simulation übernommen.",
 })
 TRANSLATIONS["en"].update({
     "simulation_parameter_values": "Set values for active criteria",
@@ -195,6 +197,8 @@ TRANSLATIONS["en"].update({
     "h2_recommendation": "Recommended strategy configuration", "h2_recommended_criteria": "Recommended criteria",
     "h2_recommended_values": "Recommended parameter values", "h2_use": "Use", "h2_parameter": "Parameter",
     "h2_value": "Recommended value", "h2_details": "Comparison and technical details",
+    "h2_apply_simulation": "Apply full recommendation to simulation",
+    "h2_applied_simulation": "Criteria, parameters and risk management were applied to the simulation.",
 })
 TRANSLATIONS["ru"].update({
     "simulation_parameter_values": "Настроить значения активных критериев",
@@ -203,6 +207,8 @@ TRANSLATIONS["ru"].update({
     "h2_recommendation": "Рекомендуемая конфигурация стратегии", "h2_recommended_criteria": "Рекомендуемые критерии",
     "h2_recommended_values": "Рекомендуемые значения параметров", "h2_use": "Использовать", "h2_parameter": "Параметр",
     "h2_value": "Рекомендуемое значение", "h2_details": "Сравнение и технические детали",
+    "h2_apply_simulation": "Полностью перенести рекомендацию в симуляцию",
+    "h2_applied_simulation": "Критерии, параметры и управление риском перенесены в симуляцию.",
 })
 
 PHRASES = {
