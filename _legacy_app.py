@@ -824,18 +824,29 @@ with telemetry_tab:
 
     st.write(f"### {tr('toggle_parameters')}")
     enabled_criteria = []
-    toggle_columns = st.columns(3)
+    toggle_columns = st.columns(5)
+    simulation_short_labels = {
+        "trend_filter": "Trend",
+        "rsi_filter": "RSI",
+        "macd_filter": "MACD",
+        "bollinger_filter": "Bollinger",
+        "fibonacci_filter": "Fibonacci",
+        "volume_filter": localize_phrase("Volumen", language),
+        "stochastic_filter": localize_phrase("Stochastik", language),
+        "atr_filter": "ATR",
+        "ichimoku_filter": "Ichimoku",
+    }
     for criterion_index, criterion in enumerate(CRITERIA):
-        with toggle_columns[criterion_index % 3]:
+        with toggle_columns[criterion_index % 5]:
             is_enabled = st.checkbox(
-                localize_phrase(criterion.name, language),
+                simulation_short_labels[criterion.criterion_id],
                 value=True,
                 key=f"simulation_criterion_{selected_symbol}_{criterion.criterion_id}",
             )
         if is_enabled:
             enabled_criteria.append(criterion.criterion_id)
 
-    with toggle_columns[len(CRITERIA) % 3]:
+    with toggle_columns[len(CRITERIA) % 5]:
         simulation_risk_management = st.checkbox(
             localize_phrase("Risikomanagement", language),
             value=True,
