@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from src.strategy import StrategyParameters
+
 
 @dataclass(frozen=True)
 class CriterionDefinition:
@@ -29,17 +31,20 @@ MINIMUM_EVALUATIONS = 20
 MINIMUM_DECISIVE_EVENTS = 3
 
 
-def _criterion_checks(df: pd.DataFrame) -> pd.DataFrame:
+def _criterion_checks(df: pd.DataFrame, params: StrategyParameters | None = None) -> pd.DataFrame:
+    params = params or StrategyParameters()
     result = pd.DataFrame(index=df.index)
     cloud_top = df[["ICHIMOKU_SPAN_A", "ICHIMOKU_SPAN_B"]].max(axis=1)
-    result["trend_filter"] = (df["Close"] > df["SMA_50"]) & (df["SMA_50"] > df["SMA_200"])
-    result["rsi_filter"] = (df["RSI"] > 40) & (df["RSI"] < 65)
+    trend_sma = df["SMA_TREND"] if "SMA_TREND" in df.columns else df["SMA_50"]
+    volume_sma = df["VOL_SMA"] if "VOL_SMA" in df.columns else df["VOL_SMA_20"]
+    result["trend_filter"] = (df["Close"] > trend_sma) & (trend_sma > df["SMA_200"])
+    result["rsi_filter"] = (df["RSI"] > params.rsi_min) & (df["RSI"] < params.rsi_max)
     result["macd_filter"] = (df["MACD"] > df["MACD_SIGNAL"]) & (df["MACD_HIST"] > 0)
     result["bollinger_filter"] = df["Close"] > df["BB_MIDDLE"]
     result["fibonacci_filter"] = df["Close"] > df["FIB_618"]
-    result["volume_filter"] = df["Volume"] > df["VOL_SMA_20"]
-    result["stochastic_filter"] = (df["STOCH_K"] > 20) & (df["STOCH_K"] < 80) & (df["STOCH_K"] > df["STOCH_D"])
-    result["atr_filter"] = (df["ATR_PCT"] >= 1) & (df["ATR_PCT"] <= 8)
+    result["volume_filter"] = df["Volume"] > volume_sma * params.volume_factor
+    result["stochastic_filter"] = (df["STOCH_K"] > params.stoch_min) & (df["STOCH_K"] < params.stoch_max) & (df["STOCH_K"] > df["STOCH_D"])
+    result["atr_filter"] = (df["ATR_PCT"] >= params.atr_min_pct) & (df["ATR_PCT"] <= params.atr_max_pct)
     result["ichimoku_filter"] = (df["Close"] > cloud_top) & (df["ICHIMOKU_CONVERSION"] > df["ICHIMOKU_BASE"])
     return result
 
@@ -51,14 +56,14 @@ def selected_criteria(enabled_criteria: list[str] | None = None) -> list[Criteri
     return [criterion for criterion in CRITERIA if criterion.criterion_id in enabled]
 
 
-def apply_enabled_criteria_signals(df: pd.DataFrame, enabled_criteria: list[str] | None = None) -> pd.DataFrame:
+def apply_enabled_criteria_signals(df: pd.DataFrame, enabled_criteria: list[str] | None = None, params: StrategyParameters | None = None) -> pd.DataFrame:
     active_criteria = selected_criteria(enabled_criteria)
     result = df.copy()
     if not active_criteria:
         result["ENTRY_SIGNAL"] = False
         return result
 
-    checks = _criterion_checks(result)
+    checks = _criterion_checks(result, params)
     active_ids = [criterion.criterion_id for criterion in active_criteria]
     result["ENTRY_SIGNAL"] = checks[active_ids].all(axis=1)
     return result
@@ -68,6 +73,7 @@ def build_criterion_telemetry(
     df: pd.DataFrame,
     trades_df: pd.DataFrame | None = None,
     enabled_criteria: list[str] | None = None,
+    params: StrategyParameters | None = None,
 ) -> dict[str, pd.DataFrame]:
     clean = df.dropna().copy().reset_index(drop=True)
     active_criteria = selected_criteria(enabled_criteria)
@@ -75,7 +81,7 @@ def build_criterion_telemetry(
         empty = pd.DataFrame()
         return {"summary": empty, "weekly": empty, "monthly": empty, "events": empty, "ranking": empty}
 
-    checks = _criterion_checks(clean)
+    checks = _criterion_checks(clean, params)
     active_ids = [criterion.criterion_id for criterion in active_criteria]
     clean["criteria_passed"] = checks[active_ids].sum(axis=1)
     clean["is_entry"] = checks[active_ids].all(axis=1)

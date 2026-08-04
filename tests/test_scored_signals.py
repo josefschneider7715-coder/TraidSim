@@ -5,6 +5,7 @@ import unittest
 import pandas as pd
 
 from src.scored_signals import apply_scored_entry_signals
+from src.strategy import StrategyParameters
 
 
 def sample_frame() -> pd.DataFrame:
@@ -72,6 +73,14 @@ class ScoredSignalTests(unittest.TestCase):
         frame.loc[1, "EXIT_SIGNAL"] = True
         result = apply_scored_entry_signals(frame, ["trend_filter", "rsi_filter", "macd_filter"])
         self.assertTrue(bool(result.loc[1, "EXIT_SIGNAL"]))
+
+    def test_custom_criterion_thresholds_change_the_result(self):
+        result = apply_scored_entry_signals(
+            sample_frame(),
+            ["trend_filter", "rsi_filter"],
+            params=StrategyParameters(rsi_min=55.0, rsi_max=65.0),
+        )
+        self.assertFalse(bool(result.loc[0, "ENTRY_SIGNAL"]))
 
 
 if __name__ == "__main__":

@@ -216,7 +216,7 @@ _legacy_path = Path(__file__).with_name("_legacy_app.py")
 _source = _legacy_path.read_text(encoding="utf-8-sig")
 
 _signal_marker = "simulation_df = apply_enabled_criteria_signals(simulation_source_df, enabled_criteria)"
-_signal_replacement = "simulation_df = apply_scored_entry_signals(simulation_source_df, enabled_criteria, minimum_confirmations=3)"
+_signal_replacement = "simulation_df = apply_scored_entry_signals(simulation_source_df, enabled_criteria, minimum_confirmations=3, params=simulation_strategy_params)"
 if _signal_marker not in _source:
     raise RuntimeError("Einfügepunkt für die neue Einstiegsmethode wurde nicht gefunden.")
 _source = _source.replace(_signal_marker, _signal_replacement, 1)

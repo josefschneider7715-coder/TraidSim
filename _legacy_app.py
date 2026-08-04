@@ -14,11 +14,11 @@ import streamlit as st
 
 from src.backtest import backtest, buy_and_hold_metrics, calculate_metrics
 from src.data_provider import download_data
-from src.indicators import add_indicators
+from src.indicators import IndicatorParameters, add_indicators
 from src.monte_carlo import MonteCarloConfig, run_monte_carlo_robustness
 from src.scoring import signal_history_payload, strategy_score
 from src.storage import create_alert_if_buy, list_watchlists, recent_alerts, recent_signal_history, save_signal_history, save_watchlist
-from src.strategy import generate_signals
+from src.strategy import StrategyParameters, generate_signals
 from src import charts as charts_module
 from src import hyperopt as hyperopt_module
 from src import telemetry as telemetry_module
@@ -816,13 +816,48 @@ with telemetry_tab:
         if is_enabled:
             enabled_criteria.append(criterion.criterion_id)
 
+    parameter_values = {
+        "sma_trend_period": 50, "rsi_period": 14, "rsi_min": 40.0, "rsi_max": 65.0,
+        "exit_rsi_max": 75.0, "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+        "bb_period": 20, "bb_std": 2.0, "fib_lookback": 120, "volume_period": 20,
+        "volume_factor": 1.0, "stoch_period": 14, "stoch_signal": 3, "stoch_min": 20.0,
+        "stoch_max": 80.0, "atr_period": 14, "atr_min_pct": 1.0, "atr_max_pct": 8.0,
+        "ichimoku_tenkan": 9, "ichimoku_kijun": 26, "ichimoku_senkou_b": 52,
+    }
+    fields_by_criterion = {
+        "trend_filter": [("sma_trend_period", 5, 200, 1)],
+        "rsi_filter": [("rsi_period", 2, 50, 1), ("rsi_min", 0.0, 99.0, 1.0), ("rsi_max", 1.0, 100.0, 1.0), ("exit_rsi_max", 1.0, 100.0, 1.0)],
+        "macd_filter": [("macd_fast", 2, 50, 1), ("macd_slow", 3, 100, 1), ("macd_signal", 2, 30, 1)],
+        "bollinger_filter": [("bb_period", 5, 100, 1), ("bb_std", 0.5, 5.0, 0.1)],
+        "fibonacci_filter": [("fib_lookback", 10, 500, 5)],
+        "volume_filter": [("volume_period", 2, 100, 1), ("volume_factor", 0.1, 5.0, 0.1)],
+        "stochastic_filter": [("stoch_period", 2, 50, 1), ("stoch_signal", 1, 20, 1), ("stoch_min", 0.0, 99.0, 1.0), ("stoch_max", 1.0, 100.0, 1.0)],
+        "atr_filter": [("atr_period", 2, 100, 1), ("atr_min_pct", 0.0, 30.0, 0.1), ("atr_max_pct", 0.1, 50.0, 0.1)],
+        "ichimoku_filter": [("ichimoku_tenkan", 2, 100, 1), ("ichimoku_kijun", 3, 200, 1), ("ichimoku_senkou_b", 4, 300, 1)],
+    }
+    with st.expander(tr("simulation_parameter_values"), expanded=True):
+        st.caption(tr("simulation_parameter_help"))
+        parameter_columns = st.columns(3)
+        visible_fields = [field for criterion_id in enabled_criteria for field in fields_by_criterion[criterion_id]]
+        for field_index, (field_name, minimum, maximum, step) in enumerate(visible_fields):
+            with parameter_columns[field_index % 3]:
+                parameter_values[field_name] = st.number_input(
+                    parameter_label(field_name, language), min_value=minimum, max_value=maximum,
+                    value=parameter_values[field_name], step=step,
+                    key=f"simulation_value_{selected_symbol}_{field_name}",
+                )
+
+    simulation_indicator_params = IndicatorParameters(**{key: parameter_values[key] for key in IndicatorParameters.__dataclass_fields__})
+    simulation_strategy_params = StrategyParameters(**{key: parameter_values[key] for key in StrategyParameters.__dataclass_fields__ if key in parameter_values})
+    simulation_parameterized_df = generate_signals(add_indicators(df, simulation_indicator_params), simulation_strategy_params)
+
     if simulation_start_date > simulation_end_date:
         st.error(tr("invalid_dates"))
-        simulation_source_df = df.iloc[0:0].copy()
+        simulation_source_df = simulation_parameterized_df.iloc[0:0].copy()
     else:
-        simulation_source_df = df[
-            (pd.to_datetime(df["Date"]).dt.date >= simulation_start_date)
-            & (pd.to_datetime(df["Date"]).dt.date <= simulation_end_date)
+        simulation_source_df = simulation_parameterized_df[
+            (pd.to_datetime(simulation_parameterized_df["Date"]).dt.date >= simulation_start_date)
+            & (pd.to_datetime(simulation_parameterized_df["Date"]).dt.date <= simulation_end_date)
         ].copy()
         st.caption(tr("simulated_window", start=simulation_start_date, end=simulation_end_date, rows=len(simulation_source_df)))
 
@@ -836,7 +871,7 @@ with telemetry_tab:
         trading_fee=fee,
     )
     simulation_metrics = calculate_metrics(simulation_trades_df, simulation_equity_df, initial_capital)
-    telemetry = build_criterion_telemetry(simulation_df, simulation_trades_df, enabled_criteria)
+    telemetry = build_criterion_telemetry(simulation_df, simulation_trades_df, enabled_criteria, simulation_strategy_params)
     summary_telemetry = telemetry["summary"]
     weekly_telemetry = telemetry["weekly"]
     monthly_telemetry = telemetry["monthly"]

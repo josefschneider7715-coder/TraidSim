@@ -180,6 +180,19 @@ TRANSLATIONS = {
     },
 }
 
+TRANSLATIONS["de"].update({
+    "simulation_parameter_values": "Werte der aktiven Kriterien einstellen",
+    "simulation_parameter_help": "Änderungen werden sofort auf Indikatoren, Einstiegssignale, Trades und Auswertung angewendet.",
+})
+TRANSLATIONS["en"].update({
+    "simulation_parameter_values": "Set values for active criteria",
+    "simulation_parameter_help": "Changes are applied immediately to indicators, entry signals, trades and evaluation.",
+})
+TRANSLATIONS["ru"].update({
+    "simulation_parameter_values": "Настроить значения активных критериев",
+    "simulation_parameter_help": "Изменения сразу применяются к индикаторам, сигналам входа, сделкам и анализу.",
+})
+
 PHRASES = {
     "en": {
         "Ausgewogen": "Balanced", "Maximale Rendite": "Maximum return", "Minimaler Drawdown": "Minimum drawdown", "Maximale Trefferquote": "Maximum win rate", "Risikoadjustiert": "Risk-adjusted",
