@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import importlib
 import base64
+import secrets
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -20,11 +22,16 @@ from src.strategy import generate_signals
 from src import charts as charts_module
 from src import hyperopt as hyperopt_module
 from src import telemetry as telemetry_module
+from src.hyperopt2 import OBJECTIVES, best_parameters as best_hyperopt2_parameters, run_hyperopt2
+from src import i18n as i18n_module
 
 
 charts_module = importlib.reload(charts_module)
 hyperopt_module = importlib.reload(hyperopt_module)
 telemetry_module = importlib.reload(telemetry_module)
+i18n_module = importlib.reload(i18n_module)
+localize_phrase = i18n_module.localize_phrase
+translate = i18n_module.translate
 make_candlestick_chart = charts_module.make_candlestick_chart
 make_chart = charts_module.make_chart
 make_equity_chart = charts_module.make_equity_chart
@@ -40,6 +47,30 @@ LOGO_PATH = APP_DIR / "assets" / "traidsim_logo.png"
 
 
 st.set_page_config(page_title="TraidSim", page_icon="chart_with_upwards_trend", layout="wide")
+
+
+@st.cache_resource
+def language_handoff_tokens() -> dict[str, tuple[str, float]]:
+    return {}
+
+
+def create_language_handoff(username: str) -> str:
+    tokens = language_handoff_tokens()
+    now = time.time()
+    expired = [token for token, (_, expiry) in tokens.items() if expiry < now]
+    for token in expired:
+        tokens.pop(token, None)
+    token = secrets.token_urlsafe(24)
+    tokens[token] = (username, now + 120.0)
+    return token
+
+
+def consume_language_handoff(token: str) -> str | None:
+    record = language_handoff_tokens().pop(token, None)
+    if record is None:
+        return None
+    username, expiry = record
+    return username if expiry >= time.time() else None
 
 
 def get_auth_config() -> dict:
@@ -60,6 +91,10 @@ def logo_data_uri() -> str:
 
 
 def require_login() -> None:
+    auth_language = str(st.query_params.get("lang", "de"))
+    if auth_language not in {"de", "en", "ru"}:
+        auth_language = "de"
+    auth_tr = lambda key, **values: translate(key, auth_language).format(**values)
     auth_config = get_auth_config()
     users = dict(auth_config.get("users", {}))
     if not users and auth_config.get("username") and auth_config.get("password_sha256"):
@@ -69,10 +104,18 @@ def require_login() -> None:
         st.error("Login ist nicht eingerichtet. Bitte .streamlit/secrets.toml mit Benutzer und Passwort-Hash anlegen.")
         st.stop()
 
+    handoff_token = str(st.query_params.get("auth_handoff", ""))
+    if handoff_token and not st.session_state.get("authenticated"):
+        handoff_username = consume_language_handoff(handoff_token)
+        if handoff_username in users:
+            st.session_state["authenticated"] = True
+            st.session_state["auth_username"] = handoff_username
+        st.query_params.pop("auth_handoff", None)
+
     if st.session_state.get("authenticated"):
         with st.sidebar:
-            st.caption(f"Angemeldet als {st.session_state.get('auth_username', '')}")
-            if st.button("Abmelden"):
+            st.caption(auth_tr("logged_in_as", user=st.session_state.get("auth_username", "")))
+            if st.button(auth_tr("logout")):
                 st.session_state.pop("authenticated", None)
                 st.session_state.pop("auth_username", None)
                 st.rerun()
@@ -124,12 +167,12 @@ def require_login() -> None:
     left_space, login_column, right_space = st.columns([1, 0.42, 1])
     with login_column:
         st.markdown(f"<div class='login-logo'><img src='{logo_data_uri()}' alt='TraidSim'></div>", unsafe_allow_html=True)
-        st.caption("Bitte anmelden, um fortzufahren.")
+        st.caption(auth_tr("login_required"))
         with st.form("login_form"):
-            username = st.text_input("Benutzername")
-            password = st.text_input("Passwort", type="password")
-            submitted = st.form_submit_button("Anmelden", type="primary")
-        st.caption("Passwort vergessen? Bitte Administrator kontaktieren.")
+            username = st.text_input(auth_tr("username"))
+            password = st.text_input(auth_tr("password"), type="password")
+            submitted = st.form_submit_button(auth_tr("login"), type="primary")
+        st.caption(auth_tr("forgot_password"))
 
     if submitted:
         expected_password_hash = str(users.get(username, ""))
@@ -137,7 +180,7 @@ def require_login() -> None:
             st.session_state["authenticated"] = True
             st.session_state["auth_username"] = username
             st.rerun()
-        st.error("Benutzername oder Passwort ist falsch.")
+        st.error(auth_tr("bad_login"))
 
     st.stop()
 
@@ -458,61 +501,195 @@ def make_criterion_heatmap(period_df: pd.DataFrame, value_column: str, title: st
     return fig
 
 
+language = str(st.query_params.get("lang", "de"))
+if language not in {"de", "en", "ru"}:
+    language = "de"
+language_handoff = create_language_handoff(str(st.session_state.get("auth_username", "")))
+
+st.markdown(
+    f"""
+    <style>
+    .traidsim-language-picker {{
+        position: fixed;
+        top: 0.55rem;
+        left: 23.5rem;
+        right: auto;
+        z-index: 1000000;
+        color: #f8fafc;
+    }}
+    .traidsim-language-picker summary {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 3.7rem;
+        height: 2rem;
+        padding: 0.25rem 0.45rem;
+        cursor: pointer;
+        list-style: none;
+        border-radius: 0.5rem;
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+    }}
+    .traidsim-language-picker summary::-webkit-details-marker {{ display: none; }}
+    .traidsim-language-picker summary::after {{
+        content: "▾";
+        color: #94a3b8;
+        font-size: 0.72rem;
+    }}
+    .traidsim-language-picker[open] summary::after {{ content: "▴"; }}
+    .traidsim-language-menu {{
+        position: absolute;
+        top: 2.3rem;
+        right: 0;
+        min-width: 8.8rem;
+        padding: 0.3rem;
+        border-radius: 0.55rem;
+        background: #111827;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    }}
+    .traidsim-language-menu a {{
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.42rem 0.5rem;
+        border-radius: 0.35rem;
+        text-decoration: none;
+        color: #f8fafc;
+        font-size: 0.82rem;
+    }}
+    .traidsim-language-menu a:hover,
+    .traidsim-language-menu a[data-active="true"] {{
+        background: rgba(148, 163, 184, 0.2);
+    }}
+    .country-flag {{
+        display: inline-block;
+        flex: 0 0 auto;
+        width: 1.75rem;
+        height: 1.08rem;
+        border-radius: 0.12rem;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.28);
+        overflow: hidden;
+    }}
+    .flag-de {{
+        background: linear-gradient(to bottom, #111 0 33.333%, #dd0000 33.333% 66.666%, #ffce00 66.666% 100%);
+    }}
+    .flag-ru {{
+        background: linear-gradient(to bottom, #fff 0 33.333%, #1c57a7 33.333% 66.666%, #d52b1e 66.666% 100%);
+    }}
+    .flag-gb {{
+        background:
+            linear-gradient(to bottom, transparent 40%, #c8102e 40% 60%, transparent 60%),
+            linear-gradient(to right, transparent 42%, #c8102e 42% 58%, transparent 58%),
+            linear-gradient(32deg, transparent 42%, #fff 42% 47%, #c8102e 47% 53%, #fff 53% 58%, transparent 58%),
+            linear-gradient(-32deg, transparent 42%, #fff 42% 47%, #c8102e 47% 53%, #fff 53% 58%, transparent 58%),
+            #012169;
+    }}
+    @media (max-width: 900px) {{
+        .traidsim-language-picker {{
+            left: 4.25rem;
+            right: auto;
+        }}
+    }}
+    </style>
+    <details class="traidsim-language-picker">
+        <summary title="Sprache auswählen"><span class="country-flag flag-{'gb' if language == 'en' else language}"></span></summary>
+        <nav class="traidsim-language-menu" aria-label="Sprachauswahl">
+            <a href="?lang=de&amp;auth_handoff={language_handoff}" data-active="{str(language == 'de').lower()}"><span class="country-flag flag-de"></span>Deutsch</a>
+            <a href="?lang=en&amp;auth_handoff={language_handoff}" data-active="{str(language == 'en').lower()}"><span class="country-flag flag-gb"></span>English</a>
+            <a href="?lang=ru&amp;auth_handoff={language_handoff}" data-active="{str(language == 'ru').lower()}"><span class="country-flag flag-ru"></span>Русский</a>
+        </nav>
+    </details>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.image(str(LOGO_PATH), width=260)
-st.caption("Trading-Simulation fuer Aktien und Krypto: Watchlist, technische Analyse, Hyperopt und Backtest")
-st.warning(DISCLAIMER)
+tr = lambda key, **values: translate(key, language).format(**values)
+
+
+def localized_dataframe(source: pd.DataFrame) -> pd.DataFrame:
+    result = source.copy()
+    result = result.rename(columns={column: localize_phrase(column, language) for column in result.columns})
+    for column in result.select_dtypes(include="object").columns:
+        result[column] = result[column].map(lambda value: localize_phrase(value, language))
+    return result
+
+
+def localized_figure(figure):
+    if language == "de":
+        return figure
+    if getattr(figure.layout, "title", None) and figure.layout.title.text:
+        figure.layout.title.text = localize_phrase(figure.layout.title.text, language)
+    for axis_name in ("xaxis", "xaxis2", "yaxis", "yaxis2"):
+        axis = getattr(figure.layout, axis_name, None)
+        if axis and axis.title and axis.title.text:
+            axis.title.text = localize_phrase(axis.title.text, language)
+    for annotation in figure.layout.annotations or []:
+        if annotation.text:
+            annotation.text = localize_phrase(annotation.text, language)
+    for trace in figure.data:
+        if getattr(trace, "name", None):
+            trace.name = localize_phrase(trace.name, language)
+        if getattr(trace, "hovertemplate", None):
+            trace.hovertemplate = localize_phrase(trace.hovertemplate, language)
+    return figure
+
+st.caption(tr("tagline"))
+st.warning(tr("disclaimer"))
 
 saved_watchlists = list_watchlists()
 saved_names = ["Manuelle Eingabe"] + [item["name"] for item in saved_watchlists]
 
 with st.sidebar:
-    st.header("Einstellungen")
+    st.header(tr("settings"))
 
-    selected_watchlist = st.selectbox("Gespeicherte Watchlist", saved_names)
+    selected_watchlist = st.selectbox(tr("saved_watchlist"), saved_names, format_func=lambda value: tr("manual_entry") if value == "Manuelle Eingabe" else value)
     selected_symbols = DEFAULT_WATCHLIST
     if selected_watchlist != "Manuelle Eingabe":
         selected_symbols = next(item["symbols"] for item in saved_watchlists if item["name"] == selected_watchlist)
 
-    watchlist_text = st.text_area("Watchlist, getrennt mit Komma", value=selected_symbols, height=120)
+    watchlist_text = st.text_area(tr("watchlist_csv"), value=selected_symbols, height=120)
 
-    watchlist_name = st.text_input("Watchlist speichern als", value=selected_watchlist if selected_watchlist != "Manuelle Eingabe" else "Meine Watchlist")
-    if st.button("Watchlist speichern"):
+    watchlist_name = st.text_input(tr("save_watchlist_as"), value=selected_watchlist if selected_watchlist != "Manuelle Eingabe" else tr("my_watchlist"))
+    if st.button(tr("save_watchlist")):
         try:
             save_watchlist(watchlist_name, parse_symbols(watchlist_text))
-            st.success("Watchlist gespeichert.")
+            st.success(tr("watchlist_saved"))
         except ValueError as exc:
             st.error(str(exc))
 
-    period = st.selectbox("Zeitraum", ["6mo", "1y", "2y", "5y", "10y", "max"], index=3)
-    interval = st.selectbox("Intervall", ["1d", "1wk", "1mo"], index=0)
-    initial_capital = st.number_input("Startkapital", value=10_000.0, min_value=100.0, step=500.0)
-    risk_per_trade = st.slider("Risiko pro Trade", min_value=0.0025, max_value=0.05, value=0.01, step=0.0025)
-    fee = st.slider("Gebuehr pro Order", min_value=0.0, max_value=0.01, value=0.001, step=0.0005)
-    atr_stop = st.slider("ATR Stop-Loss Faktor", min_value=0.5, max_value=5.0, value=2.0, step=0.25)
-    atr_tp = st.slider("ATR Take-Profit Faktor", min_value=0.5, max_value=8.0, value=3.0, step=0.25)
+    period = st.selectbox(tr("period"), ["6mo", "1y", "2y", "5y", "10y", "max"], index=3)
+    interval = st.selectbox(tr("interval"), ["1d", "1wk", "1mo"], index=0)
+    initial_capital = st.number_input(tr("initial_capital"), value=10_000.0, min_value=100.0, step=500.0)
+    risk_per_trade = st.slider(tr("risk_per_trade"), min_value=0.0025, max_value=0.05, value=0.01, step=0.0025)
+    fee = st.slider(tr("fee_per_order"), min_value=0.0, max_value=0.01, value=0.001, step=0.0005)
+    atr_stop = st.slider(tr("atr_stop"), min_value=0.5, max_value=5.0, value=2.0, step=0.25)
+    atr_tp = st.slider(tr("atr_take_profit"), min_value=0.5, max_value=8.0, value=3.0, step=0.25)
     st.divider()
-    enable_hyperopt = st.checkbox("Hyperopt anzeigen", value=True)
-    hyperopt_trials = st.slider("Hyperopt Durchlaeufe", min_value=50, max_value=2000, value=500, step=50)
-    hyperopt_min_trades = st.number_input("Hyperopt Mindest-Trades", min_value=0, max_value=20, value=1, step=1)
-    st.button("Neu berechnen", type="primary")
+    enable_hyperopt = st.checkbox(tr("show_hyperopt"), value=True)
+    hyperopt_trials = st.slider(tr("hyperopt_trials"), min_value=50, max_value=2000, value=500, step=50)
+    hyperopt_min_trades = st.number_input(tr("hyperopt_min_trades"), min_value=0, max_value=20, value=1, step=1)
+    st.button(tr("recalculate"), type="primary")
 
 alerts = recent_alerts()
-with st.expander("Neue Signale", expanded=bool(alerts)):
+with st.expander(tr("new_signals"), expanded=bool(alerts)):
     if alerts:
-        st.dataframe(pd.DataFrame(alerts), use_container_width=True)
+        st.dataframe(localized_dataframe(pd.DataFrame(alerts)), use_container_width=True)
     else:
-        st.info("Noch keine KAUF-Signale gespeichert.")
+        st.info(tr("no_buy_signals"))
 
 history = recent_signal_history(50)
-with st.expander("Signal-Historie", expanded=False):
+with st.expander(tr("signal_history"), expanded=False):
     if history:
-        st.dataframe(pd.DataFrame(history), use_container_width=True)
+        st.dataframe(localized_dataframe(pd.DataFrame(history)), use_container_width=True)
     else:
-        st.info("Noch keine Signale gespeichert.")
+        st.info(tr("no_signals"))
 
 symbols = parse_symbols(watchlist_text)
 if not symbols:
-    st.error("Keine Symbole eingegeben.")
+    st.error(tr("no_symbols"))
     st.stop()
 
 summary_rows = {}
@@ -526,7 +703,7 @@ for idx, symbol in enumerate(symbols):
     try:
         raw = download_data(symbol, period=period, interval=interval)
         if len(raw) < 220 and interval == "1d":
-            st.warning(f"{symbol}: Weniger als 220 Tagesdaten. SMA 200 ist nicht sauber belastbar.")
+            st.warning(tr("data_warning", symbol=symbol))
 
         df = generate_signals(add_indicators(raw))
         score = strategy_score(df)
@@ -578,59 +755,58 @@ for idx, symbol in enumerate(symbols):
 summary_df = pd.DataFrame(summary_rows.values()).sort_values("Score %", ascending=False)
 valid_symbols = [symbol for symbol in summary_df["Symbol"].tolist() if symbol in data_cache]
 if not valid_symbols:
-    st.error("Keine gueltigen Symbole analysiert.")
-    st.write("### Fehleruebersicht")
+    st.error(tr("no_valid_symbols"))
+    st.write(f"### {tr('error_overview')}")
     st.dataframe(summary_df, use_container_width=True)
-    st.info("Pruefe Internetzugriff, Symbolnamen und ob Yahoo Finance erreichbar ist.")
+    st.info(tr("check_connection"))
     st.stop()
 
-selected_symbol = st.selectbox("Detailansicht auswaehlen", valid_symbols, index=0)
+selected_symbol = st.selectbox(tr("select_detail"), valid_symbols, index=0)
 df = data_cache[selected_symbol]
 trades_df = trades_cache[selected_symbol]
 equity_df = equity_cache[selected_symbol]
 metrics = metrics_cache[selected_symbol]
 score = strategy_score(df)
 
-overview_tab, hyperopt_tab, telemetry_tab = st.tabs(["Uebersicht", "Hyperopt", "Simulation"])
+overview_tab, hyperopt_tab, hyperopt2_tab, telemetry_tab, documentation_tab = st.tabs(
+    [tr("overview"), "Hyperopt", "Hyperopt 2", tr("simulation"), tr("documentation")]
+)
 
 with overview_tab:
-    st.caption("Die bestehende Detailansicht und der Backtest stehen direkt unter diesen Reitern.")
+    st.caption(tr("tab_caption"))
 
 with telemetry_tab:
-    st.subheader(f"Simulation: {selected_symbol}")
-    st.caption(
-        "Aktiviere nur die Kriterien, die in dieser Simulation beruecksichtigt werden sollen. "
-        "Auswertung, Signale und Ranglisten beziehen sich ausschliesslich auf diese Auswahl."
-    )
+    st.subheader(tr("simulation_title", symbol=selected_symbol))
+    st.caption(tr("simulation_help"))
 
     available_dates = pd.to_datetime(df["Date"]).dt.date
     min_simulation_date = available_dates.min()
     max_simulation_date = available_dates.max()
 
-    st.write("### Zeitfenster")
+    st.write(f"### {tr('time_window')}")
     date_col1, date_col2 = st.columns(2)
     simulation_start_date = date_col1.date_input(
-        "Startdatum",
+        tr("start_date"),
         value=min_simulation_date,
         min_value=min_simulation_date,
         max_value=max_simulation_date,
         key=f"simulation_start_date_{selected_symbol}",
     )
     simulation_end_date = date_col2.date_input(
-        "Enddatum",
+        tr("end_date"),
         value=max_simulation_date,
         min_value=min_simulation_date,
         max_value=max_simulation_date,
         key=f"simulation_end_date_{selected_symbol}",
     )
 
-    st.write("### Parameter ein- und ausschalten")
+    st.write(f"### {tr('toggle_parameters')}")
     enabled_criteria = []
     toggle_columns = st.columns(3)
     for criterion_index, criterion in enumerate(CRITERIA):
         with toggle_columns[criterion_index % 3]:
             is_enabled = st.checkbox(
-                criterion.name,
+                localize_phrase(criterion.name, language),
                 value=True,
                 key=f"simulation_criterion_{selected_symbol}_{criterion.criterion_id}",
             )
@@ -638,17 +814,14 @@ with telemetry_tab:
             enabled_criteria.append(criterion.criterion_id)
 
     if simulation_start_date > simulation_end_date:
-        st.error("Das Startdatum muss vor dem Enddatum liegen.")
+        st.error(tr("invalid_dates"))
         simulation_source_df = df.iloc[0:0].copy()
     else:
         simulation_source_df = df[
             (pd.to_datetime(df["Date"]).dt.date >= simulation_start_date)
             & (pd.to_datetime(df["Date"]).dt.date <= simulation_end_date)
         ].copy()
-        st.caption(
-            f"Simuliertes Zeitfenster: {simulation_start_date} bis {simulation_end_date} "
-            f"mit {len(simulation_source_df)} Kurszeilen."
-        )
+        st.caption(tr("simulated_window", start=simulation_start_date, end=simulation_end_date, rows=len(simulation_source_df)))
 
     simulation_df = apply_enabled_criteria_signals(simulation_source_df, enabled_criteria)
     simulation_trades_df, simulation_equity_df = backtest(
@@ -669,20 +842,20 @@ with telemetry_tab:
 
     if summary_telemetry.empty:
         if not enabled_criteria:
-            st.info("Aktiviere mindestens ein Kriterium, damit eine Simulation berechnet werden kann.")
+            st.info(tr("enable_criterion"))
         elif len(simulation_source_df) < 2:
-            st.info("Das gewaehlte Zeitfenster enthaelt zu wenig Kursdaten fuer eine Simulation.")
+            st.info(tr("too_few_prices"))
         else:
-            st.info("Fuer das gewaehlte Zeitfenster sind noch nicht genug Daten fuer eine Telemetrie-Auswertung vorhanden.")
+            st.info(tr("no_telemetry"))
     else:
         metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-        metric_col1.metric("Aktive Kriterien", summary_telemetry["Kriterium"].nunique())
-        metric_col2.metric("Auswertungen", int(summary_telemetry["evaluation_count"].sum()))
-        metric_col3.metric("Trades", simulation_metrics.get("Abgeschlossene Trades", 0))
-        metric_col4.metric("Rendite", f"{simulation_metrics.get('Gesamtrendite %', 0.0):.2f}%")
+        metric_col1.metric(tr("active_criteria"), summary_telemetry["Kriterium"].nunique())
+        metric_col2.metric(tr("evaluations"), int(summary_telemetry["evaluation_count"].sum()))
+        metric_col3.metric(tr("trades"), simulation_metrics.get("Abgeschlossene Trades", 0))
+        metric_col4.metric(tr("return"), f"{simulation_metrics.get('Gesamtrendite %', 0.0):.2f}%")
 
-        st.write("### Simulations-Kennzahlen")
-        st.dataframe(format_metrics(simulation_metrics), use_container_width=True)
+        st.write(f"### {tr('simulation_metrics')}")
+        st.dataframe(localized_dataframe(format_metrics(simulation_metrics)), use_container_width=True)
 
         display_summary = summary_telemetry.rename(
             columns={
@@ -698,9 +871,9 @@ with telemetry_tab:
                 "confidence_score": "Konfidenz",
             }
         )
-        st.write("### Einzellauf-Auswertung")
+        st.write(f"### {tr('single_run')}")
         st.dataframe(
-            display_summary[
+            localized_dataframe(display_summary[
                 [
                     "Kriterium",
                     "Gruppe",
@@ -716,11 +889,11 @@ with telemetry_tab:
                     "Konfidenz",
                     "Bewertung",
                 ]
-            ],
+            ]),
             use_container_width=True,
         )
 
-        st.write("### Ranglisten")
+        st.write(f"### {tr('rankings')}")
         ranking_view = ranking_telemetry.rename(
             columns={
                 "criterion_relevance_score": "Relevanzscore",
@@ -731,7 +904,7 @@ with telemetry_tab:
             }
         )
         st.dataframe(
-            ranking_view[
+            localized_dataframe(ranking_view[
                 [
                     "Kriterium",
                     "Relevanzscore",
@@ -741,13 +914,13 @@ with telemetry_tab:
                     "Stabilitaet",
                     "Bewertung",
                 ]
-            ],
+            ]),
             use_container_width=True,
         )
 
-        period_mode = st.radio("Zeitraum fuer Heatmap", ["Wochen", "Monate"], horizontal=True)
+        period_mode = st.radio(tr("heatmap_period"), ["Wochen", "Monate"], format_func=lambda value: tr("weeks") if value == "Wochen" else tr("months"), horizontal=True)
         value_column = st.selectbox(
-            "Kennzahl",
+            tr("metric"),
             [
                 "Auswertungen",
                 "Ausloeser",
@@ -757,28 +930,26 @@ with telemetry_tab:
                 "Rendite_Pct",
                 "Verpasste_Gewinne_Pct",
             ],
+            format_func=lambda value: localize_phrase(value, language),
         )
         period_df = weekly_telemetry if period_mode == "Wochen" else monthly_telemetry
-        st.plotly_chart(make_criterion_heatmap(period_df, value_column, f"{period_mode}: {value_column}"), use_container_width=True)
+        st.plotly_chart(localized_figure(make_criterion_heatmap(period_df, value_column, f"{period_mode}: {value_column}")), use_container_width=True)
 
-        st.write("### Wochen- und Monatsaggregate")
-        sub_tab_week, sub_tab_month, sub_tab_events = st.tabs(["Wochen", "Monate", "Signalereignisse"])
+        st.write(f"### {tr('aggregates')}")
+        sub_tab_week, sub_tab_month, sub_tab_events = st.tabs([tr("weeks"), tr("months"), tr("signal_events")])
         with sub_tab_week:
-            st.dataframe(weekly_telemetry, use_container_width=True)
+            st.dataframe(localized_dataframe(weekly_telemetry), use_container_width=True)
         with sub_tab_month:
-            st.dataframe(monthly_telemetry, use_container_width=True)
+            st.dataframe(localized_dataframe(monthly_telemetry), use_container_width=True)
         with sub_tab_events:
             event_view = events_telemetry[events_telemetry["role"] != "none"].copy()
-            st.dataframe(event_view.tail(500), use_container_width=True)
+            st.dataframe(localized_dataframe(event_view.tail(500)), use_container_width=True)
 
-        st.write("### Monte-Carlo-Zukunftssimulation")
-        st.caption(
-            "Erzeugt viele moegliche 1-Jahres-Kurspfade aus historischen Renditen des gewaehlten Zeitfensters "
-            "und testet die aktiven Kriterien sowie Risiko-/Stop-/Take-Profit-Parameter auf Robustheit."
-        )
+        st.write(f"### {tr('mc_title')}")
+        st.caption(tr("mc_help"))
         mc_col1, mc_col2 = st.columns(2)
         monte_carlo_runs = mc_col1.slider(
-            "Monte-Carlo-Pfade",
+            tr("mc_paths"),
             min_value=50,
             max_value=500,
             value=200,
@@ -786,7 +957,7 @@ with telemetry_tab:
             key=f"mc_runs_{selected_symbol}",
         )
         monte_carlo_seed = mc_col2.number_input(
-            "Zufalls-Seed",
+            tr("random_seed"),
             min_value=1,
             max_value=999_999,
             value=42,
@@ -794,13 +965,13 @@ with telemetry_tab:
             key=f"mc_seed_{selected_symbol}",
         )
         run_monte_carlo_button = st.button(
-            "Monte Carlo starten",
+            tr("start_mc"),
             type="primary",
             key=f"run_mc_{selected_symbol}",
         )
 
         if run_monte_carlo_button:
-            with st.spinner(f"Simuliere {monte_carlo_runs} Zukunftspfade fuer {selected_symbol}..."):
+            with st.spinner(tr("mc_spinner", runs=monte_carlo_runs, symbol=selected_symbol)):
                 st.session_state["monte_carlo_result"] = {
                     "symbol": selected_symbol,
                     "criteria": tuple(enabled_criteria),
@@ -825,67 +996,65 @@ with telemetry_tab:
             mc_results = mc_data["results"]
             mc_paths = mc_data["paths"]
             if mc_summary.empty:
-                st.info("Fuer Monte Carlo sind mindestens ca. 30 historische Kurszeilen im gewaehlten Zeitfenster noetig.")
+                st.info(tr("mc_too_short"))
             else:
                 score_value = float(mc_summary["Robustheits-Score %"].iloc[0])
                 score_color = "#22c55e" if score_value >= 67 else "#f59e0b" if score_value >= 34 else "#ef4444"
                 st.markdown(
-                    f"<h4>Robustheits-Score: <span style='color:{score_color}'>{score_value:.1f}%</span></h4>",
+                    f"<h4>{tr('mc_score')}: <span style='color:{score_color}'>{score_value:.1f}%</span></h4>",
                     unsafe_allow_html=True,
                 )
-                st.dataframe(mc_summary, use_container_width=True)
-                st.plotly_chart(make_monte_carlo_paths_chart(mc_paths, selected_symbol), use_container_width=True)
-                st.write("### Monte-Carlo-Einzelergebnisse")
-                st.dataframe(mc_results.sort_values("Strategierendite %", ascending=False), use_container_width=True)
+                st.dataframe(localized_dataframe(mc_summary), use_container_width=True)
+                st.plotly_chart(localized_figure(make_monte_carlo_paths_chart(mc_paths, selected_symbol)), use_container_width=True)
+                st.write(f"### {tr('mc_individual')}")
+                st.dataframe(localized_dataframe(mc_results.sort_values("Strategierendite %", ascending=False)), use_container_width=True)
                 st.download_button(
-                    "Monte-Carlo-Ergebnisse als CSV herunterladen",
-                    mc_results.to_csv(index=False).encode("utf-8"),
+                    tr("mc_download"),
+                    localized_dataframe(mc_results).to_csv(index=False).encode("utf-8-sig"),
                     f"{selected_symbol}_monte_carlo_robustheit.csv",
                     "text/csv",
                 )
         else:
-            st.info("Starte Monte Carlo, um die aktiven Kriterien fuer ein simuliertes Zukunftsjahr zu testen.")
+            st.info(tr("mc_not_started"))
 
         st.download_button(
-            "Kriterien-Auswertung als CSV herunterladen",
-            summary_telemetry.to_csv(index=False).encode("utf-8"),
+            tr("criteria_download"),
+            localized_dataframe(summary_telemetry).to_csv(index=False).encode("utf-8-sig"),
             f"{selected_symbol}_kriterien_telemetrie.csv",
             "text/csv",
         )
         st.download_button(
-            "Signalereignisse als CSV herunterladen",
-            events_telemetry.to_csv(index=False).encode("utf-8"),
+            tr("events_download"),
+            localized_dataframe(events_telemetry).to_csv(index=False).encode("utf-8-sig"),
             f"{selected_symbol}_kriterien_ereignisse.csv",
             "text/csv",
         )
 
 with overview_tab:
-    st.subheader(f"Strategiechart: {selected_symbol}")
-    st.plotly_chart(make_chart(df, selected_symbol), use_container_width=True)
+    st.subheader(tr("strategy_chart", symbol=selected_symbol))
+    st.plotly_chart(localized_figure(make_chart(df, selected_symbol)), use_container_width=True)
     
-    st.subheader("Strategieparameter")
+    st.subheader(tr("strategy_parameters"))
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Signal", score["signal"])
-    col2.metric("Strategie-Score", f"{score['score']}/{score['max_score']}")
+    col1.metric(tr("signal"), localize_phrase(score["signal"], language))
+    col2.metric(tr("strategy_score"), f"{score['score']}/{score['max_score']}")
     col3.metric("RSI", f"{score['rsi']:.2f}")
     col4.metric("ATR", f"{score['atr']:.2f}")
     
-    check_df = pd.DataFrame([{"Kriterium": key, "Erfuellt": "Ja" if value else "Nein"} for key, value in score["checks"].items()])
-    st.write("### Kriterienpruefung")
+    check_df = pd.DataFrame([{tr("criterion"): localize_phrase(key, language), tr("fulfilled"): tr("yes") if value else tr("no")} for key, value in score["checks"].items()])
+    st.write(f"### {tr('criteria_check')}")
     st.dataframe(check_df, use_container_width=True)
     
-    st.write("### Watchlist-Ranking")
-    st.dataframe(summary_df, use_container_width=True)
+    st.write(f"### {tr('watchlist_ranking')}")
+    st.dataframe(localized_dataframe(summary_df), use_container_width=True)
     
-    st.write("### Backtest-Kennzahlen")
-    st.dataframe(format_metrics(metrics), use_container_width=True)
+    st.write(f"### {tr('backtest_metrics')}")
+    st.dataframe(localized_dataframe(format_metrics(metrics)), use_container_width=True)
     
 with hyperopt_tab:
     if enable_hyperopt:
         st.write("### Hyperopt")
-        st.caption(
-            "Optimiert die Parameter aus den ausgewaehlten Kriterien. Risikomanagement kann separat ein- oder ausgeschaltet werden."
-        )
+        st.caption(tr("hyperopt_help"))
         criteria_labels = {
             "trend": "SMA Trend positiv",
             "rsi": "RSI im Zielbereich",
@@ -896,10 +1065,11 @@ with hyperopt_tab:
             "stoch": "Stochastik positiv",
             "atr": "ATR Volatilitaet handelbar",
             "ichimoku": "Ichimoku bullisch",
-            "risk_management": "Risikomanagement optimieren",
+            "risk_management": tr("risk_management_opt"),
         }
-        st.write("### Kriterien fuer Hyperopt")
-        st.caption("Nur angehakte Kriterien werden als Pflichtfilter im Hyperopt verwendet.")
+        criteria_labels = {key: localize_phrase(value, language) for key, value in criteria_labels.items()}
+        st.write(f"### {tr('hyperopt_criteria')}")
+        st.caption(tr("hyperopt_criteria_help"))
         criteria_defaults = {
             "trend": True,
             "rsi": True,
@@ -922,47 +1092,44 @@ with hyperopt_tab:
                     key=f"hyperopt_criterion_{selected_symbol}_{criterion_key}",
                 )
         if not any(hyperopt_criteria.values()):
-            st.warning("Mindestens ein Hyperopt-Kriterium sollte aktiv sein.")
+            st.warning(tr("criterion_required"))
 
-        st.write("### Analyse-Zeitfenster")
+        st.write(f"### {tr('analysis_window')}")
         hyperopt_available_dates = pd.to_datetime(df["Date"]).dt.date
         hyperopt_min_date = hyperopt_available_dates.min()
         hyperopt_max_date = hyperopt_available_dates.max()
         hyperopt_date_col1, hyperopt_date_col2 = st.columns(2)
         hyperopt_start_date = hyperopt_date_col1.date_input(
-            "Hyperopt Startdatum",
+            tr("hyperopt_start"),
             value=hyperopt_min_date,
             min_value=hyperopt_min_date,
             max_value=hyperopt_max_date,
             key=f"hyperopt_start_date_{selected_symbol}",
         )
         hyperopt_end_date = hyperopt_date_col2.date_input(
-            "Hyperopt Enddatum",
+            tr("hyperopt_end"),
             value=hyperopt_max_date,
             min_value=hyperopt_min_date,
             max_value=hyperopt_max_date,
             key=f"hyperopt_end_date_{selected_symbol}",
         )
         if hyperopt_start_date > hyperopt_end_date:
-            st.error("Das Hyperopt-Startdatum muss vor dem Enddatum liegen.")
+            st.error(tr("hyperopt_dates_invalid"))
             hyperopt_source_df = df.iloc[0:0].copy()
         else:
             hyperopt_source_df = df[
                 (pd.to_datetime(df["Date"]).dt.date >= hyperopt_start_date)
                 & (pd.to_datetime(df["Date"]).dt.date <= hyperopt_end_date)
             ].copy()
-            st.caption(
-                f"Hyperopt analysiert {hyperopt_start_date} bis {hyperopt_end_date} "
-                f"mit {len(hyperopt_source_df)} Kurszeilen."
-            )
+            st.caption(tr("hyperopt_window", start=hyperopt_start_date, end=hyperopt_end_date, rows=len(hyperopt_source_df)))
 
-        run_hyperopt_button = st.button("Hyperopt starten", type="primary")
+        run_hyperopt_button = st.button(tr("start_hyperopt"), type="primary")
     
         if run_hyperopt_button:
             if len(hyperopt_source_df) < 220:
-                st.warning("Das Hyperopt-Zeitfenster sollte mindestens ca. 220 Kurszeilen enthalten.")
+                st.warning(tr("hyperopt_short"))
             else:
-                with st.spinner(f"Optimiere {selected_symbol} mit {hyperopt_trials} Durchlaeufen..."):
+                with st.spinner(tr("hyperopt_spinner", symbol=selected_symbol, trials=hyperopt_trials)):
                     st.session_state["hyperopt_result"] = {
                         "symbol": selected_symbol,
                         "start_date": hyperopt_start_date,
@@ -991,44 +1158,176 @@ with hyperopt_tab:
             best_params = best_hyperopt_parameters(hyperopt_df)
     
             if best_params is None:
-                st.info("Keine Hyperopt-Ergebnisse vorhanden.")
+                st.info(tr("no_hyperopt"))
             else:
                 opt_indicator_df = add_indicators(hyperopt_source_df, best_params.indicator_parameters())
                 opt_signal_df = generate_signals(opt_indicator_df, best_params.strategy_parameters(hyperopt_criteria))
-                st.write("### Konvergenz")
-                st.plotly_chart(make_hyperopt_convergence_chart(hyperopt_df, selected_symbol), use_container_width=True)
-                st.write("### Beste Parameter")
-                parameter_df = pd.DataFrame(hyperopt_parameter_rows(best_params, hyperopt_criteria, hyperopt_df))
-                styled_parameter_df = parameter_df.style.apply(style_hyperopt_parameter_row, axis=1).format(
+                st.write(f"### {tr('convergence')}")
+                st.plotly_chart(localized_figure(make_hyperopt_convergence_chart(hyperopt_df, selected_symbol)), use_container_width=True)
+                st.write(f"### {tr('best_parameters')}")
+                parameter_df = localized_dataframe(pd.DataFrame(hyperopt_parameter_rows(best_params, hyperopt_criteria, hyperopt_df)))
+                impact_column = localize_phrase("Einfluss %", language)
+                value_column_label = localize_phrase("Hyperopt-Wert", language)
+                styled_parameter_df = parameter_df.style.apply(
+                    lambda row: [influence_color(float(row.get(impact_column, 0.0))) if column in {impact_column, localize_phrase("Wichtigkeit", language)} else "" for column in row.index],
+                    axis=1,
+                ).format(
                     {
-                        "Hyperopt-Wert": lambda value: f"{value:.4f}".rstrip("0").rstrip(".")
+                        value_column_label: lambda value: f"{value:.4f}".rstrip("0").rstrip(".")
                         if isinstance(value, float)
                         else value,
-                        "Einfluss %": "{:.0f}",
+                        impact_column: "{:.0f}",
                     }
                 )
-                st.caption("Einfluss: rot = gering/unwichtig, gelb = mittel, gruen = wichtig im aktuellen Hyperopt-Lauf.")
+                st.caption(tr("importance_help"))
                 st.dataframe(styled_parameter_df, use_container_width=True)
-                st.write(f"### Kerzenchart: {selected_symbol}")
-                st.plotly_chart(make_candlestick_chart(hyperopt_source_df, selected_symbol), use_container_width=True)
+                st.write(f"### {tr('candlestick_chart', symbol=selected_symbol)}")
+                st.plotly_chart(localized_figure(make_candlestick_chart(hyperopt_source_df, selected_symbol)), use_container_width=True)
         else:
-            st.info("Klicke auf 'Hyperopt starten', um den ausgewaehlten Detailwert zu optimieren.")
-    
+            st.info(tr("hyperopt_not_started"))
+
+with hyperopt2_tab:
+    st.subheader("Hyperopt 2")
+    st.caption(tr("h2_help"))
+    objective = st.selectbox(
+        tr("objective"),
+        list(OBJECTIVES),
+        format_func=lambda value: localize_phrase(OBJECTIVES[value], language),
+        key=f"hyperopt2_objective_{selected_symbol}",
+    )
+    h2_criteria_defaults = {
+        "trend": True,
+        "rsi": True,
+        "macd": True,
+        "bollinger": True,
+        "fibonacci": False,
+        "volume": True,
+        "stoch": False,
+        "atr": False,
+        "ichimoku": False,
+        "risk_management": False,
+    }
+    h2_labels = {
+        "trend": "Trend", "rsi": "RSI", "macd": "MACD", "bollinger": "Bollinger",
+        "fibonacci": "Fibonacci", "volume": localize_phrase("Volumen", language), "stoch": localize_phrase("Stochastik", language),
+        "atr": "ATR", "ichimoku": "Ichimoku", "risk_management": localize_phrase("Risikomanagement", language),
+    }
+    h2_criteria = {}
+    h2_columns = st.columns(5)
+    for h2_index, (h2_key, h2_label) in enumerate(h2_labels.items()):
+        with h2_columns[h2_index % 5]:
+            h2_criteria[h2_key] = st.checkbox(
+                h2_label,
+                value=h2_criteria_defaults[h2_key],
+                key=f"hyperopt2_criterion_{selected_symbol}_{h2_key}",
+            )
+
+    if st.button(tr("run"), type="primary", key=f"run_hyperopt2_{selected_symbol}"):
+        if len(df) < 220:
+            st.warning(tr("h2_short"))
+        else:
+            with st.spinner(tr("h2_spinner", symbol=selected_symbol)):
+                st.session_state["hyperopt2_result"] = {
+                    "symbol": selected_symbol,
+                    "objective": objective,
+                    "data": run_hyperopt2(
+                        df,
+                        initial_capital=initial_capital,
+                        trading_fee=fee,
+                        risk_per_trade=risk_per_trade,
+                        atr_stop_factor=atr_stop,
+                        atr_take_profit_factor=atr_tp,
+                        max_trials=hyperopt_trials,
+                        min_trades=hyperopt_min_trades,
+                        objective=objective,
+                        enabled_criteria=h2_criteria,
+                    ),
+                }
+
+    h2_state = st.session_state.get("hyperopt2_result")
+    if h2_state and h2_state["symbol"] == selected_symbol and h2_state["objective"] == objective:
+        h2_result = h2_state["data"]
+        h2_best = best_hyperopt2_parameters(h2_result)
+        metric_a, metric_b, metric_c, metric_d = st.columns(4)
+        best_row = h2_result.trials.iloc[0]
+        metric_a.metric(tr("yield"), f"{best_row['Gesamtrendite %']:.2f} %")
+        metric_b.metric(tr("drawdown"), f"{best_row['Max. Drawdown %']:.2f} %")
+        metric_c.metric(tr("trades"), int(best_row["Abgeschlossene Trades"]))
+        metric_d.metric(tr("stability"), f"{h2_result.stability_index:.1f}/100")
+
+        st.write(f"### {tr('results')}")
+        st.dataframe(localized_dataframe(h2_result.benchmarks).style.format({localize_phrase("Rendite %", language): "{:.2f}", localize_phrase("Endkapital", language): "{:.2f}"}), use_container_width=True)
+        if h2_best is not None:
+            st.dataframe(localized_dataframe(pd.DataFrame([h2_best.__dict__])), use_container_width=True)
+
+        left_chart, right_chart = st.columns(2)
+        with left_chart:
+            st.write(f"### {tr('importance')}")
+            importance_fig = go.Figure(go.Bar(
+                x=h2_result.importance["Importance %"], y=h2_result.importance["Parameter"], orientation="h"
+            ))
+            importance_fig.update_layout(height=480, yaxis={"autorange": "reversed"}, xaxis_title="Importance %")
+            st.plotly_chart(localized_figure(importance_fig), use_container_width=True)
+        with right_chart:
+            st.write(f"### {tr('heatmap')}")
+            heatmap_fig = go.Figure()
+            if not h2_result.heatmap.empty:
+                heatmap_fig.add_trace(go.Heatmap(
+                    z=h2_result.heatmap.values,
+                    x=[str(value) for value in h2_result.heatmap.columns],
+                    y=[str(value) for value in h2_result.heatmap.index],
+                    colorscale="RdYlGn",
+                    colorbar={"title": "Objective"},
+                ))
+                heatmap_fig.update_layout(
+                    height=480,
+                    xaxis_title=str(h2_result.heatmap.columns.name),
+                    yaxis_title=str(h2_result.heatmap.index.name),
+                )
+            st.plotly_chart(localized_figure(heatmap_fig), use_container_width=True)
+
+        st.write(f"### {tr('sensitivity')}")
+        sensitivity_fig = go.Figure()
+        for parameter, parameter_df in h2_result.sensitivity.groupby("Parameter"):
+            sensitivity_fig.add_trace(go.Scatter(
+                x=parameter_df["Wert"], y=parameter_df["Objective Mittel"], mode="lines+markers", name=parameter
+            ))
+        sensitivity_fig.update_layout(height=430, xaxis_title=tr("parameter_value"), yaxis_title=tr("objective_mean"))
+        st.plotly_chart(localized_figure(sensitivity_fig), use_container_width=True)
+        st.write(f"### {tr('evaluation')}")
+        st.info(localize_phrase(h2_result.evaluation, language))
+        st.download_button(
+            tr("h2_download"),
+            localized_dataframe(h2_result.trials).to_csv(index=False).encode("utf-8-sig"),
+            f"{selected_symbol}_hyperopt2.csv",
+            "text/csv",
+        )
+    else:
+        st.info(tr("not_started_h2"))
+
+with documentation_tab:
+    documentation = {
+        "de": """### Benutzerhandbuch\n1. Watchlist und Zeitraum links wählen.\n2. In **Übersicht** Signale und Backtest prüfen.\n3. Mit **Simulation** Kriterien testen.\n4. In **Hyperopt 2** Ziel wählen und Optimierung starten.\n\n### Architektur\nMarktdaten → Indikatoren → gemeinsame Signal-Engine → Backtest → Optimierung/Visualisierung.\n\n### Roadmap\nWalk-forward-Validierung, persistente Optimierungsläufe, weitere Datenanbieter und Benachrichtigungen.\n\n### Changelog\n- Hyperopt 2 mit Mehrzieloptimierung, Importance, Heatmaps, Sensitivität und Stabilitätsindex\n- Dokumentations-Reiter\n- Sprachauswahl Deutsch/Englisch/Russisch\n\n### API und Kontext-Hilfe\nDie Kernfunktionen liegen in `src/`. Tooltips und Erläuterungen befinden sich unmittelbar an den Eingaben.\n\n### Ideen\nPortfolio-Optimierung, Out-of-sample-Ranglisten und automatische Strategieberichte.""",
+        "en": """### User guide\n1. Select watchlist and period in the sidebar.\n2. Review signals and backtest in **Overview**.\n3. Test criteria in **Simulation**.\n4. Select an objective in **Hyperopt 2** and run it.\n\n### Architecture\nMarket data → indicators → shared signal engine → backtest → optimization/visualization.\n\n### Roadmap\nWalk-forward validation, persistent optimization runs, additional providers and notifications.\n\n### Changelog\n- Hyperopt 2 with multi-objective scoring, importance, heatmaps, sensitivity and stability index\n- Documentation tab\n- German/English/Russian language selector\n\n### API and context help\nCore functions live in `src/`; explanations are shown next to relevant controls.""",
+        "ru": """### Руководство\n1. Выберите список инструментов и период слева.\n2. Проверьте сигналы и бэктест в **Обзоре**.\n3. Тестируйте критерии в **Симуляции**.\n4. Выберите цель в **Hyperopt 2** и запустите оптимизацию.\n\n### Архитектура\nРыночные данные → индикаторы → единый модуль сигналов → бэктест → оптимизация и визуализация.\n\n### План\nWalk-forward проверка, сохранение запусков, новые источники данных и уведомления.\n\n### Изменения\n- Hyperopt 2: несколько целей, важность, тепловые карты, чувствительность и стабильность\n- Вкладка документации\n- Выбор немецкого, английского и русского языков.""",
+    }
+    st.markdown(documentation[language])
+
 with overview_tab:
     if not equity_df.empty:
-        st.plotly_chart(make_equity_chart(equity_df, selected_symbol), use_container_width=True)
+        st.plotly_chart(localized_figure(make_equity_chart(equity_df, selected_symbol)), use_container_width=True)
     
-    st.write("### Trades")
+    st.write(f"### {tr('trades')}")
     if trades_df.empty:
-        st.info("Keine Trades im gewaehlten Zeitraum.")
+        st.info(tr("no_trades"))
     else:
-        st.dataframe(trades_df, use_container_width=True)
+        st.dataframe(localized_dataframe(trades_df), use_container_width=True)
     
-    st.download_button("Ranking als CSV herunterladen", summary_df.to_csv(index=False).encode("utf-8"), "watchlist_ranking.csv", "text/csv")
+    st.download_button(tr("ranking_download"), localized_dataframe(summary_df).to_csv(index=False).encode("utf-8-sig"), "watchlist_ranking.csv", "text/csv")
     if not trades_df.empty:
         st.download_button(
-            "Trades als CSV herunterladen",
-            trades_df.to_csv(index=False).encode("utf-8"),
+            tr("trades_download"),
+            localized_dataframe(trades_df).to_csv(index=False).encode("utf-8-sig"),
             f"{selected_symbol}_trades.csv",
             "text/csv",
         )
