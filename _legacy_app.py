@@ -335,7 +335,7 @@ def hyperopt_parameter_rows(
     return rows
 
 
-def make_hyperopt_convergence_chart(results_df: pd.DataFrame, symbol: str):
+def make_hyperopt_convergence_chart(results_df: pd.DataFrame, symbol: str, optimizer_name: str = "Hyperopt"):
     ordered = results_df.sort_values("Durchlauf").copy() if "Durchlauf" in results_df.columns else results_df.sort_index().copy()
     if "Durchlauf" not in ordered.columns:
         ordered["Durchlauf"] = range(1, len(ordered) + 1)
@@ -424,7 +424,7 @@ def make_hyperopt_convergence_chart(results_df: pd.DataFrame, symbol: str):
         font={"size": 13, "color": "#e5e7eb"},
     )
     fig.update_layout(
-        title=f"{symbol} - Hyperopt Konvergenz zur besten Loesung",
+        title=f"{symbol} - {optimizer_name} Konvergenz zur besten Loesung",
         height=430,
         xaxis_title="Durchlauf",
         yaxis={
@@ -1341,6 +1341,18 @@ with hyperopt2_tab:
         metric_b.metric(tr("drawdown"), f"{best_row['Max. Drawdown %']:.2f} %")
         metric_c.metric(tr("trades"), int(best_row["Abgeschlossene Trades"]))
         metric_d.metric(tr("stability"), f"{h2_result.stability_index:.1f}/100")
+
+        st.write(f"### {tr('convergence')}")
+        st.plotly_chart(
+            localized_figure(
+                make_hyperopt_convergence_chart(
+                    h2_result.trials,
+                    selected_symbol,
+                    optimizer_name="Hyperopt 2",
+                )
+            ),
+            use_container_width=True,
+        )
 
         st.write(f"### {tr('h2_recommendation')}")
         if h2_best is not None:
