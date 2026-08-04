@@ -21,13 +21,14 @@ from src.storage import create_alert_if_buy, list_watchlists, recent_alerts, rec
 from src.strategy import StrategyParameters, generate_signals
 from src import charts as charts_module
 from src import hyperopt as hyperopt_module
+from src import hyperopt2 as hyperopt2_module
 from src import telemetry as telemetry_module
-from src.hyperopt2 import OBJECTIVES, best_parameters as best_hyperopt2_parameters, recommended_criteria, run_hyperopt2
 from src import i18n as i18n_module
 
 
 charts_module = importlib.reload(charts_module)
 hyperopt_module = importlib.reload(hyperopt_module)
+hyperopt2_module = importlib.reload(hyperopt2_module)
 telemetry_module = importlib.reload(telemetry_module)
 i18n_module = importlib.reload(i18n_module)
 localize_phrase = i18n_module.localize_phrase
@@ -38,6 +39,10 @@ make_chart = charts_module.make_chart
 make_equity_chart = charts_module.make_equity_chart
 best_hyperopt_parameters = hyperopt_module.best_hyperopt_parameters
 run_hyperopt = hyperopt_module.run_hyperopt
+OBJECTIVES = hyperopt2_module.OBJECTIVES
+best_hyperopt2_parameters = hyperopt2_module.best_parameters
+recommended_criteria = hyperopt2_module.recommended_criteria
+run_hyperopt2 = hyperopt2_module.run_hyperopt2
 CRITERIA = telemetry_module.CRITERIA
 apply_enabled_criteria_signals = telemetry_module.apply_enabled_criteria_signals
 build_criterion_telemetry = telemetry_module.build_criterion_telemetry
