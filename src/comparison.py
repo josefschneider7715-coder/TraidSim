@@ -95,7 +95,7 @@ def run_strategy_benchmark(
     trading_fee: float = 0.001,
     position_mode: PositionMode = "risk",
 ) -> BenchmarkResult:
-    """Berechnet die TraidSim-Strategie und liquidiert offene Positionen am Ende.
+    """Berechnet die DayTrade-Lab-Strategie und liquidiert offene Positionen am Ende.
 
     Die Signale des Vortags werden wie im bestehenden Backtest am naechsten
     Eroeffnungskurs ausgefuehrt. Stop-Loss und Take-Profit verwenden Tageshoch
@@ -112,7 +112,7 @@ def run_strategy_benchmark(
 
     result = _prepare_prices(df)
     if len(result) < 2:
-        return _empty_result(initial_capital, "TraidSim-Strategie")
+        return _empty_result(initial_capital, "DayTrade-Lab-Strategie")
 
     if "ENTRY_SIGNAL" not in result.columns:
         result["ENTRY_SIGNAL"] = False
@@ -275,7 +275,7 @@ def run_strategy_benchmark(
     equity_df = pd.DataFrame(equity_rows)
     trades_df = pd.DataFrame(trades)
     exposure_pct = exposure_rows / len(result) * 100.0
-    label = "TraidSim-Strategie (100 % Kapital)" if position_mode == "full_capital" else "TraidSim-Strategie (Risikomodell)"
+    label = "DayTrade-Lab-Strategie (100 % Kapital)" if position_mode == "full_capital" else "DayTrade-Lab-Strategie (Risikomodell)"
     metrics = _curve_metrics(equity_df, trades_df, initial_capital, fees_total, exposure_pct, label)
     return BenchmarkResult(equity_df, trades_df, metrics)
 

@@ -1,4 +1,4 @@
-# TraidSim Roadmap
+# DayTrade Lab Roadmap
 
 Statuslegende: 🟢 fertig · 🟡 in Arbeit · 🔵 geplant · 🔴 verworfen
 

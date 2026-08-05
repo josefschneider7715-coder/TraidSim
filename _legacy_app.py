@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import importlib
 import base64
+import json
 import secrets
 import time
 from pathlib import Path
@@ -11,9 +12,12 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src.backtest import backtest, buy_and_hold_metrics, calculate_metrics
 from src.data_provider import download_data
+from src.daytrading_monitor import analyze_intraday, simulate_current_day
+from src.paper_trading import PaperAccount, open_virtual_position, process_virtual_order
 from src.indicators import IndicatorParameters, add_indicators
 from src.monte_carlo import MonteCarloConfig, run_monte_carlo_robustness
 from src.scoring import signal_history_payload, strategy_score
@@ -65,7 +69,7 @@ APP_DIR = Path(__file__).parent
 LOGO_PATH = APP_DIR / "assets" / "traidsim_logo.png"
 
 
-st.set_page_config(page_title="TraidSim", page_icon="chart_with_upwards_trend", layout="wide")
+st.set_page_config(page_title="DayTrade Lab", page_icon="chart_with_upwards_trend", layout="wide")
 
 
 @st.cache_resource
@@ -217,6 +221,206 @@ DEFAULT_WATCHLIST = "AAPL,AMZN,NVDA,MSFT,GOOGL,BTC-USDT,ETH-USDT,SOL-USDT,1211.H
 
 def parse_symbols(raw_symbols: str) -> list[str]:
     return [symbol.strip().upper() for symbol in raw_symbols.split(",") if symbol.strip()]
+
+
+def tradingview_symbol(symbol: str) -> str:
+    """Uebersetzt die gaengigsten Watchlist-Symbole fuer TradingView."""
+    normalized = symbol.upper().strip()
+    if normalized.endswith("-USDT"):
+        return f"BINANCE:{normalized.replace('-', '')}"
+    if normalized.endswith("-USD"):
+        return f"COINBASE:{normalized.replace('-', '')}"
+    if normalized.endswith(".HK"):
+        return f"HKEX:{normalized.removesuffix('.HK')}"
+    if normalized == "^GDAXI":
+        return "XETR:DAX"
+    return f"NASDAQ:{normalized}"
+
+
+def render_tradingview_chart(symbol: str) -> None:
+    widget_config = {
+        "autosize": False,
+        "width": "100%",
+        "height": 850,
+        "symbol": tradingview_symbol(symbol),
+        "interval": "15",
+        "timezone": "Europe/Berlin",
+        "theme": "dark",
+        "style": "1",
+        "locale": "de_DE",
+        "allow_symbol_change": True,
+        "hide_side_toolbar": False,
+        "withdateranges": True,
+        "details": True,
+        "calendar": False,
+        "support_host": "https://www.tradingview.com",
+    }
+    components.html(
+        f"""
+        <style>
+          html, body {{ height: 100%; margin: 0; overflow: hidden; }}
+          .tradingview-widget-container,
+          .tradingview-widget-container__widget {{ height: 850px !important; width: 100% !important; }}
+          .tradingview-widget-container iframe {{ height: 850px !important; min-height: 850px !important; }}
+        </style>
+        <div class="tradingview-widget-container">
+          <div class="tradingview-widget-container__widget"></div>
+          <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+          {json.dumps(widget_config)}
+          </script>
+        </div>
+        """,
+        height=900,
+        scrolling=False,
+    )
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_intraday_monitor_data(symbol: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    return (
+        download_data(symbol, period="3mo", interval="60m"),
+        download_data(symbol, period="1mo", interval="15m"),
+        download_data(symbol, period="5d", interval="5m"),
+    )
+
+
+@st.fragment(run_every="60s")
+def render_daytrading_monitor(
+    symbol: str, initial_capital: float, trade_amount: float, risk_per_trade: float,
+    fee: float, atr_stop: float, atr_tp: float, automatic_paper_trading: bool,
+) -> None:
+    st.subheader("Daytrading-Monitor")
+    st.caption("1 Stunde = Trend · 15 Minuten = Handelssignal · 5 Minuten = Einstieg · Aktualisierung höchstens einmal pro Minute")
+    try:
+        hourly, fifteen_minute, five_minute = load_intraday_monitor_data(symbol)
+        monitor = analyze_intraday(hourly, fifteen_minute, five_minute)
+        day_curve = simulate_current_day(five_minute, trade_amount, fee)
+    except Exception as exc:
+        st.warning(f"Intraday-Monitor konnte noch keine Daten laden: {exc}")
+        return
+
+    st.markdown(
+        f"""
+        <div style="padding:1.25rem 1.4rem;border-radius:0.8rem;background:{monitor['color']};color:white;margin:0.5rem 0 1rem 0">
+          <div style="font-size:0.82rem;opacity:0.88">AKTUELLES MONITOR-SIGNAL</div>
+          <div style="font-size:2rem;font-weight:800;line-height:1.2">{monitor['signal']}</div>
+          <div style="margin-top:0.35rem">{monitor['reason']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if "paper_account" not in st.session_state:
+        st.session_state["paper_account"] = PaperAccount.create(initial_capital)
+    account: PaperAccount = st.session_state["paper_account"]
+    manual_opened = False
+    if account.quantity == 0 and st.button("Einsatzsumme jetzt virtuell kaufen", type="primary"):
+        result = open_virtual_position(
+            account,
+            symbol=symbol,
+            price=monitor["price"],
+            atr=monitor["values"]["5m"]["ATR"],
+            trade_amount=trade_amount,
+            fee_fraction=fee,
+            stop_factor=atr_stop,
+            take_profit_factor=atr_tp,
+        )
+        st.success(result)
+        manual_opened = account.quantity > 0
+    order_result = "Virtuelle Startposition angelegt" if manual_opened else "Automatik pausiert"
+    if automatic_paper_trading and not manual_opened:
+        order_result = process_virtual_order(
+            account,
+            symbol=symbol,
+            signal=monitor["signal"],
+            price=monitor["price"],
+            atr=monitor["values"]["5m"]["ATR"],
+            candle_id=f"{symbol}:{monitor['updated_at']}",
+            trade_amount=trade_amount,
+            risk_fraction=risk_per_trade,
+            fee_fraction=fee,
+            stop_factor=atr_stop,
+            take_profit_factor=atr_tp,
+        )
+
+    st.write("#### Automatisches virtuelles Depot")
+    paper_columns = st.columns(7)
+    paper_columns[0].metric("Status", "AKTIV" if automatic_paper_trading else "PAUSIERT")
+    valuation_price = monitor["price"] if account.symbol in {None, symbol} else account.entry_price
+    paper_columns[1].metric("Virtuelles Kapital", f"{account.equity(valuation_price):,.2f} €")
+    paper_columns[2].metric("Cash", f"{account.cash:,.2f} €")
+    paper_columns[3].metric("Position", f"{account.quantity} Stück")
+    paper_columns[4].metric("Einstieg", f"{account.entry_price:.2f}" if account.quantity else "–")
+    paper_columns[5].metric("Stop-Loss", f"{account.stop_price:.2f}" if account.quantity else "–")
+    paper_columns[6].metric("Take-Profit", f"{account.take_profit_price:.2f}" if account.quantity else "–")
+    st.caption(f"Letzte Automatikaktion: {order_result}")
+    if account.trades:
+        st.dataframe(pd.DataFrame(account.trades[-20:][::-1]), use_container_width=True, hide_index=True)
+
+    metric_columns = st.columns(6)
+    metric_columns[0].metric("Einsatz", f"{trade_amount:,.0f} €")
+    metric_columns[1].metric("Risikobudget", f"{trade_amount * risk_per_trade:,.2f} €")
+    metric_columns[2].metric("Kurs", f"{monitor['price']:.2f}")
+    metric_columns[3].metric("1h-Trend", monitor["trend_1h"])
+    metric_columns[4].metric("15m-Bestätigungen", f"{monitor['confirmation_count']}/4")
+    metric_columns[5].metric("5m-Einstieg", "Bereit" if monitor["entry_5m"] else "Warten")
+
+    values = monitor["values"]
+    hour_rows = [
+        {"Kriterium": "Kurs über SMA 50", "Aktuell": values["1h"]["Kurs"], "Vergleich": values["1h"]["SMA 50"], "Status": "Erfüllt" if values["1h"]["Kurs"] > values["1h"]["SMA 50"] else "Nicht erfüllt"},
+        {"Kriterium": "SMA 20 über SMA 50", "Aktuell": values["1h"]["SMA 20"], "Vergleich": values["1h"]["SMA 50"], "Status": "Erfüllt" if values["1h"]["SMA 20"] > values["1h"]["SMA 50"] else "Nicht erfüllt"},
+    ]
+    setup_rows = [
+        {"Kriterium": "RSI zwischen 40 und 65", "Aktuell": values["15m"]["RSI"], "Vergleich": "40–65", "Status": "Erfüllt" if monitor["confirmations"]["RSI 40–65"] else "Nicht erfüllt"},
+        {"Kriterium": "MACD über Signallinie", "Aktuell": values["15m"]["MACD"], "Vergleich": values["15m"]["MACD-Signallinie"], "Status": "Erfüllt" if monitor["confirmations"]["MACD bullisch"] else "Nicht erfüllt"},
+        {"Kriterium": "Kurs über Bollinger-Mitte", "Aktuell": values["15m"]["Kurs"], "Vergleich": values["15m"]["Bollinger-Mitte"], "Status": "Erfüllt" if monitor["confirmations"]["Über Bollinger-Mitte"] else "Nicht erfüllt"},
+        {"Kriterium": "Volumen über Durchschnitt", "Aktuell": values["15m"]["Volumen"], "Vergleich": values["15m"]["Volumen-SMA 20"], "Status": "Erfüllt" if monitor["confirmations"]["Volumen bestätigt"] else "Nicht erfüllt"},
+    ]
+    entry_rows = [
+        {"Kriterium": "Kurs über SMA 20", "Aktuell": values["5m"]["Kurs"], "Vergleich": values["5m"]["SMA 20"], "Status": "Erfüllt" if values["5m"]["Kurs"] > values["5m"]["SMA 20"] else "Nicht erfüllt"},
+        {"Kriterium": "MACD über Signallinie", "Aktuell": values["5m"]["MACD"], "Vergleich": values["5m"]["MACD-Signallinie"], "Status": "Erfüllt" if values["5m"]["MACD"] > values["5m"]["MACD-Signallinie"] else "Nicht erfüllt"},
+    ]
+
+    def colored_criteria(rows: list[dict]) -> pd.io.formats.style.Styler:
+        frame = pd.DataFrame(rows)
+        return frame.style.apply(
+            lambda row: [
+                "background-color: rgba(22, 163, 74, 0.32); color: #dcfce7; font-weight: 600"
+                if row["Status"] == "Erfüllt"
+                else "background-color: rgba(220, 38, 38, 0.32); color: #fee2e2; font-weight: 600"
+            ] * len(row),
+            axis=1,
+        )
+
+    hour_column, setup_column, entry_column = st.columns(3, gap="medium")
+    with hour_column:
+        st.write("#### 1 Stunde – Trend")
+        st.dataframe(colored_criteria(hour_rows), use_container_width=True, hide_index=True, height=178)
+    with setup_column:
+        st.write("#### 15 Minuten – Signal")
+        st.dataframe(colored_criteria(setup_rows), use_container_width=True, hide_index=True, height=178)
+    with entry_column:
+        st.write("#### 5 Minuten – Einstieg")
+        st.dataframe(colored_criteria(entry_rows), use_container_width=True, hide_index=True, height=178)
+    st.caption(f"Letzte verfügbare 5-Minuten-Kerze: {monitor['updated_at']} · automatische Aktualisierung alle 60 Sekunden")
+
+    last_profit = float(day_curve["Gewinn"].iloc[-1])
+    profit_color = "#16a34a" if last_profit >= 0 else "#dc2626"
+    figure = go.Figure()
+    figure.add_trace(go.Scatter(
+        x=day_curve["Date"], y=day_curve["Gewinn"], mode="lines",
+        name="Simulierter Tagesgewinn", line={"color": profit_color, "width": 3},
+        fill="tozeroy",
+    ))
+    figure.add_hline(y=0, line_dash="dash", line_color="#94a3b8")
+    figure.update_layout(
+        title=f"Simulierter Gewinn heute: {last_profit:,.2f} €",
+        height=460, xaxis_title="Uhrzeit", yaxis_title="Gewinn / Verlust in €",
+        hovermode="x unified", margin={"l": 30, "r": 20, "t": 60, "b": 30},
+        paper_bgcolor="#0b0b0b", plot_bgcolor="#0b0b0b", font={"color": "#f2f2f2"},
+    )
+    st.plotly_chart(figure, use_container_width=True)
+    st.caption("Die Gewinnkurve ist eine rückblickende Intraday-Simulation auf 5-Minuten-Kerzen mit dem gewählten Einsatz und den eingestellten Gebühren. Das Risikobudget dient als Vorgabe für die spätere Stop-/Positionsgrößenberechnung. Sie ist keine reale oder garantierte Rendite.")
 
 
 def format_metrics(metrics: dict) -> pd.DataFrame:
@@ -499,7 +703,6 @@ def make_monte_carlo_paths_chart(paths_df: pd.DataFrame, symbol: str):
 language = str(st.query_params.get("lang", "de"))
 if language not in {"de", "en", "ru"}:
     language = "de"
-language_handoff = create_language_handoff(str(st.session_state.get("auth_username", "")))
 
 st.markdown(
     f"""
@@ -526,6 +729,13 @@ st.markdown(
     [data-testid="stAppViewContainer"] textarea,
     [data-testid="stAppViewContainer"] [data-baseweb="select"] > div {{
         background-color: #141414 !important;
+    }}
+    [data-testid="stDataFrame"] {{
+        background: #0f0f0f !important;
+    }}
+    [data-testid="stExpander"] {{
+        background: #0f0f0f !important;
+        border-color: #303030 !important;
     }}
     .traidsim-language-picker {{
         position: fixed;
@@ -614,16 +824,17 @@ st.markdown(
     <details class="traidsim-language-picker">
         <summary title="Sprache auswählen"><span class="country-flag flag-{'gb' if language == 'en' else language}"></span></summary>
         <nav class="traidsim-language-menu" aria-label="Sprachauswahl">
-            <a href="?lang=de&amp;auth_handoff={language_handoff}" data-active="{str(language == 'de').lower()}"><span class="country-flag flag-de"></span>Deutsch</a>
-            <a href="?lang=en&amp;auth_handoff={language_handoff}" data-active="{str(language == 'en').lower()}"><span class="country-flag flag-gb"></span>English</a>
-            <a href="?lang=ru&amp;auth_handoff={language_handoff}" data-active="{str(language == 'ru').lower()}"><span class="country-flag flag-ru"></span>Русский</a>
+            <a href="?lang=de" data-active="{str(language == 'de').lower()}"><span class="country-flag flag-de"></span>Deutsch</a>
+            <a href="?lang=en" data-active="{str(language == 'en').lower()}"><span class="country-flag flag-gb"></span>English</a>
+            <a href="?lang=ru" data-active="{str(language == 'ru').lower()}"><span class="country-flag flag-ru"></span>Русский</a>
         </nav>
     </details>
     """,
     unsafe_allow_html=True,
 )
 
-st.image(str(LOGO_PATH), width=260)
+st.title("DayTrade Lab")
+st.caption("Regelbasierte Daytrading-Simulation und Strategieanalyse")
 tr = lambda key, **values: translate(key, language).format(**values)
 
 
@@ -685,18 +896,13 @@ with st.sidebar:
         except ValueError as exc:
             st.error(str(exc))
 
-    period = st.selectbox(tr("period"), ["6mo", "1y", "2y", "5y", "10y", "max"], index=3, key="period_input")
-    interval = st.selectbox(tr("interval"), ["1d", "1wk", "1mo"], index=0, key="interval_input")
     initial_capital = st.number_input(tr("initial_capital"), value=10_000.0, min_value=100.0, step=500.0, key="initial_capital_input")
     risk_per_trade = st.slider(tr("risk_per_trade"), min_value=0.0025, max_value=0.05, value=0.01, step=0.0025, key="risk_per_trade_input")
+    st.caption(f"Maximales Risiko: {risk_per_trade * 100:.2f} % des gewählten Einsatzes")
     fee = st.slider(tr("fee_per_order"), min_value=0.0, max_value=0.01, value=0.001, step=0.0005, key="fee_input")
+    st.caption(f"Gebühr je Order: {fee * 100:.2f} %")
     atr_stop = st.slider(tr("atr_stop"), min_value=0.5, max_value=5.0, value=2.0, step=0.25, key="atr_stop_input")
     atr_tp = st.slider(tr("atr_take_profit"), min_value=0.5, max_value=8.0, value=3.0, step=0.25, key="atr_tp_input")
-    st.divider()
-    enable_hyperopt = st.checkbox(tr("show_hyperopt"), value=True)
-    hyperopt_trials = st.slider(tr("hyperopt_trials"), min_value=50, max_value=2000, value=500, step=50)
-    hyperopt_min_trades = st.number_input(tr("hyperopt_min_trades"), min_value=0, max_value=20, value=1, step=1)
-    st.button(tr("recalculate"), type="primary")
 
 alerts = recent_alerts()
 with st.expander(tr("new_signals"), expanded=bool(alerts)):
@@ -716,6 +922,38 @@ symbols = parse_symbols(watchlist_text)
 if not symbols:
     st.error(tr("no_symbols"))
     st.stop()
+
+st.subheader("TradingView – Kerzenchart")
+tradingview_selection = st.selectbox(
+    "Symbol im TradingView-Fenster",
+    symbols,
+    key="tradingview_symbol_selection",
+)
+trade_amount = st.number_input(
+    "Kapitaleinsatz pro Trade (€)",
+    min_value=100.0,
+    value=min(5_000.0, float(initial_capital)),
+    step=500.0,
+    help="Diese Summe wird für die Tages-Gewinnsimulation verwendet.",
+)
+paper_control_left, paper_control_right = st.columns([3, 1])
+with paper_control_left:
+    automatic_paper_trading = st.toggle(
+        "Automatisches Paper-Trading aktivieren",
+        value=True,
+        help="Standardmäßig aktiv; kann jederzeit manuell pausiert werden. Es werden ausschließlich virtuelle Orders ausgeführt.",
+    )
+with paper_control_right:
+    if st.button("Virtuelles Depot zurücksetzen", use_container_width=True):
+        st.session_state["paper_account"] = PaperAccount.create(initial_capital)
+        st.rerun()
+st.caption("Interaktiver 15-Minuten-Chart. Symbol und Zeitintervall können direkt im Chart geändert werden.")
+render_tradingview_chart(tradingview_selection)
+render_daytrading_monitor(
+    tradingview_selection, initial_capital, trade_amount, risk_per_trade,
+    fee, atr_stop, atr_tp, automatic_paper_trading,
+)
+st.stop()
 
 summary_rows = {}
 data_cache = {}
@@ -780,10 +1018,7 @@ for idx, symbol in enumerate(symbols):
 summary_df = pd.DataFrame(summary_rows.values()).sort_values("Score %", ascending=False)
 valid_symbols = [symbol for symbol in summary_df["Symbol"].tolist() if symbol in data_cache]
 if not valid_symbols:
-    st.error(tr("no_valid_symbols"))
-    st.write(f"### {tr('error_overview')}")
-    st.dataframe(summary_df, use_container_width=True)
-    st.info(tr("check_connection"))
+    st.warning("Die Strategieauswertung wartet auf Kursdaten. TradingView und der Intraday-Monitor darüber können weiterhin verwendet werden.")
     st.stop()
 
 current_user = str(st.session_state.get("auth_username", ""))

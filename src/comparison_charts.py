@@ -15,7 +15,7 @@ def make_strategy_vs_buy_hold_chart(aligned: pd.DataFrame, symbol: str) -> go.Fi
         subplot_titles=("Kapitalverlauf", "Laufender Vorteil der Strategie"),
     )
     fig.add_trace(
-        go.Scatter(x=aligned["Date"], y=aligned["Strategie"], mode="lines", name="TraidSim-Strategie"),
+        go.Scatter(x=aligned["Date"], y=aligned["Strategie"], mode="lines", name="DayTrade-Lab-Strategie"),
         row=1,
         col=1,
     )
@@ -39,7 +39,7 @@ def make_strategy_vs_buy_hold_chart(aligned: pd.DataFrame, symbol: str) -> go.Fi
     fig.update_yaxes(title_text="Kapital", row=1, col=1)
     fig.update_yaxes(title_text="Differenz", row=2, col=1)
     fig.update_layout(
-        title=f"{symbol} – TraidSim-Strategie gegen Buy and Hold",
+        title=f"{symbol} – DayTrade-Lab-Strategie gegen Buy and Hold",
         height=700,
         legend={"orientation": "h"},
         hovermode="x unified",
@@ -50,7 +50,7 @@ def make_strategy_vs_buy_hold_chart(aligned: pd.DataFrame, symbol: str) -> go.Fi
 def make_oracle_comparison_chart(aligned: pd.DataFrame, symbol: str, logarithmic: bool = False) -> go.Figure:
     fig = go.Figure()
     for column, label in [
-        ("Strategie", "TraidSim-Strategie"),
+        ("Strategie", "DayTrade-Lab-Strategie"),
         ("Buy and Hold", "Buy and Hold"),
         ("Oracle", "Theoretisches Optimum (Oracle)"),
     ]:

@@ -37,8 +37,9 @@ CRYPTO_BASES = {
     "OP",
     "INJ",
 }
-BINANCE_INTERVALS = {"1d": "1d", "1wk": "1w", "1mo": "1M"}
+BINANCE_INTERVALS = {"5m": "5m", "15m": "15m", "60m": "1h", "1d": "1d", "1wk": "1w", "1mo": "1M"}
 PERIOD_OFFSETS = {
+    "5d": pd.DateOffset(days=5),
     "6mo": pd.DateOffset(months=6),
     "1y": pd.DateOffset(years=1),
     "2y": pd.DateOffset(years=2),
@@ -107,7 +108,7 @@ class BinanceUSDTDataProvider(MarketDataProvider):
         if binance_symbol is None:
             raise ValueError(f"{symbol} ist kein unterstuetztes USDT-Kryptopaar.")
         if interval not in BINANCE_INTERVALS:
-            raise ValueError("Binance-Kryptodaten unterstuetzen aktuell 1d, 1wk und 1mo.")
+            raise ValueError("Das gewaehlte Binance-Zeitintervall wird nicht unterstuetzt.")
 
         end_time = pd.Timestamp.now(tz="UTC")
         start_time = end_time - PERIOD_OFFSETS.get(period, PERIOD_OFFSETS["5y"])
