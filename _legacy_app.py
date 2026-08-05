@@ -968,7 +968,7 @@ with telemetry_tab:
     )
     simulation_save_col, simulation_load_col = st.columns(2)
     with simulation_save_col:
-        simulation_save_button_col, simulation_load_button_col = st.columns(2)
+        simulation_save_button_col, simulation_load_button_col, _ = st.columns([1, 1.15, 3.5])
     with simulation_save_button_col:
         if st.button(tr("save_result"), key=f"save_simulation_result_{selected_symbol}"):
             save_analysis_result(
@@ -1419,7 +1419,7 @@ with hyperopt2_tab:
     )
     hyperopt_save_col, hyperopt_load_col = st.columns(2)
     with hyperopt_save_col:
-        hyperopt_save_button_col, hyperopt_load_button_col = st.columns(2)
+        hyperopt_save_button_col, hyperopt_load_button_col, _ = st.columns([1, 1.15, 3.5])
     with hyperopt_load_col:
         if saved_hyperopt_results:
             selected_hyperopt_result_id = st.selectbox(
