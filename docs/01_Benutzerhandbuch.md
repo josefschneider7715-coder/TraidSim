@@ -1,8 +1,8 @@
-# TraidSim Benutzerhandbuch
+# DayTrade Lab Benutzerhandbuch
 
 ## Zweck
 
-TraidSim ist ein technisches Analyse- und Backtesting-Werkzeug. Es vergleicht regelbasierte Handelsstrategien mit Buy and Hold und einem theoretischen Oracle. Die Anwendung stellt keine Anlageberatung dar.
+DayTrade Lab ist ein technisches Analyse- und Backtesting-Werkzeug. Es vergleicht regelbasierte Handelsstrategien mit Buy and Hold und einem theoretischen Oracle. Die Anwendung stellt keine Anlageberatung dar.
 
 ## Grundablauf
 
@@ -30,7 +30,7 @@ Verwendet das frei gewählte Zeitfenster und die aktivierten Kriterien. Der Eins
 
 ### Dokumentation
 
-Enthält Bedienung, Architektur, Roadmap, Changelog und Ideenübersicht direkt in TraidSim.
+Enthält Bedienung, Architektur, Roadmap, Changelog und Ideenübersicht direkt in DayTrade Lab.
 
 ## Wichtige Kennzahlen
 

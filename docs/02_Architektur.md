@@ -1,4 +1,4 @@
-# TraidSim – technische Architektur
+# DayTrade Lab – technische Architektur
 
 ## 1. Anwendungsschicht
 
