@@ -968,6 +968,8 @@ with telemetry_tab:
     )
     simulation_save_col, simulation_load_col = st.columns(2)
     with simulation_save_col:
+        simulation_save_button_col, simulation_load_button_col = st.columns(2)
+    with simulation_save_button_col:
         if st.button(tr("save_result"), key=f"save_simulation_result_{selected_symbol}"):
             save_analysis_result(
                 current_user,
@@ -1005,13 +1007,16 @@ with telemetry_tab:
                     st.session_state[f"simulation_value_{selected_symbol}_{parameter_name}"] = parameter_value
                 st.session_state["loaded_simulation_result"] = True
 
+        else:
+            st.info(tr("no_saved_results"))
+
+    if saved_simulation_results:
+        with simulation_load_button_col:
             st.button(
                 tr("load_result"),
                 key=f"load_simulation_result_{selected_symbol}",
                 on_click=load_saved_simulation_result,
             )
-        else:
-            st.info(tr("no_saved_results"))
     if st.session_state.pop("loaded_simulation_result", False):
         st.success(tr("result_loaded"))
 
@@ -1413,6 +1418,8 @@ with hyperopt2_tab:
         key=f"hyperopt_result_name_{selected_symbol}",
     )
     hyperopt_save_col, hyperopt_load_col = st.columns(2)
+    with hyperopt_save_col:
+        hyperopt_save_button_col, hyperopt_load_button_col = st.columns(2)
     with hyperopt_load_col:
         if saved_hyperopt_results:
             selected_hyperopt_result_id = st.selectbox(
@@ -1430,16 +1437,11 @@ with hyperopt2_tab:
                 st.session_state["hyperopt2_result"] = loaded_state
                 st.session_state["loaded_hyperopt_result"] = True
 
-            st.button(
-                tr("load_result"),
-                key=f"load_hyperopt_result_{selected_symbol}",
-                on_click=load_saved_hyperopt_result,
-            )
         else:
             st.info(tr("no_saved_results"))
 
     h2_state = st.session_state.get("hyperopt2_result")
-    with hyperopt_save_col:
+    with hyperopt_save_button_col:
         if st.button(
             tr("save_result"),
             key=f"save_hyperopt_result_{selected_symbol}",
@@ -1455,6 +1457,13 @@ with hyperopt2_tab:
                 portable_hyperopt_state,
             )
             st.success(tr("result_saved"))
+    if saved_hyperopt_results:
+        with hyperopt_load_button_col:
+            st.button(
+                tr("load_result"),
+                key=f"load_hyperopt_result_{selected_symbol}",
+                on_click=load_saved_hyperopt_result,
+            )
     if st.session_state.pop("loaded_hyperopt_result", False):
         st.success(tr("result_loaded"))
 
